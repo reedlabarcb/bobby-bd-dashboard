@@ -1,0 +1,7 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "npx tsx src/lib/db/migrate.ts && npm start"
+healthcheckPath = "/"
+restartPolicyType = "on_failure"

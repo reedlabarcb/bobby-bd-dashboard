@@ -1,36 +1,70 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bobby BD Dashboard
 
-## Getting Started
+Business Development & Prospecting Dashboard for commercial real estate brokers.
 
-First, run the development server:
+## Stack
+
+- Next.js 16 (App Router) + TypeScript
+- SQLite + Drizzle ORM
+- Tailwind CSS + shadcn/ui
+- Claude AI (OM parsing, contact enrichment)
+- Mapbox GL JS (deal map visualization)
+
+## Local Setup
 
 ```bash
+# Install dependencies
+npm install
+
+# Copy env file and add your API keys
+cp .env.local.example .env.local
+
+# Run database migration
+npm run db:migrate
+
+# Seed with sample data
+npm run db:seed
+
+# Start dev server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Purpose | Required |
+|----------|---------|----------|
+| `ANTHROPIC_API_KEY` | OM parsing, AI summaries | For AI features |
+| `HUNTER_API_KEY` | Email finder/verification | For enrichment |
+| `APOLLO_API_KEY` | Contact enrichment | For enrichment |
+| `APIFY_API_KEY` | LinkedIn/web scraping | For enrichment |
+| `NEXT_PUBLIC_MAPBOX_TOKEN` | Map visualization | For map page |
+| `DB_PATH` | SQLite database path | No (defaults to ./data/bobby.db) |
 
-## Learn More
+The app works without any API keys — AI features will show "not configured" messages gracefully.
 
-To learn more about Next.js, take a look at the following resources:
+## Railway Deployment
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Create a new Railway project
+2. Add a **Volume** mounted at `/data`
+3. Connect your GitHub repo
+4. Set environment variables:
+   - `DB_PATH=/data/bobby.db`
+   - `ANTHROPIC_API_KEY=sk-ant-...`
+   - `NEXT_PUBLIC_MAPBOX_TOKEN=pk....`
+   - (optional) `HUNTER_API_KEY`, `APOLLO_API_KEY`, `APIFY_API_KEY`
+5. Deploy — Railway will auto-detect `railway.toml` for build/start config
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The `railway.toml` handles:
+- Running DB migrations on deploy
+- Health check on `/`
+- Auto-restart on failure
 
-## Deploy on Vercel
+## Features
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Dashboard** — Stats, recent activity, quick actions
+- **Contacts** — CRUD, search/filter, Excel import, AI enrichment pipeline
+- **Deals** — OM upload with AI parsing, status pipeline, geocoding
+- **Activities** — Global activity feed with timeline
+- **Map** — Interactive Mapbox map with deal pins, filters, heatmap
