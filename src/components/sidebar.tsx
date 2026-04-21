@@ -8,12 +8,16 @@ import {
   Building2,
   Activity,
   Map,
+  FolderSearch,
+  CalendarClock,
 } from "lucide-react";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/deals", label: "Deals", icon: Building2 },
+  { href: "/library", label: "Library", icon: FolderSearch },
+  { href: "/leases", label: "Expiring Leases", icon: CalendarClock },
   { href: "/activities", label: "Activities", icon: Activity },
   { href: "/map", label: "Map", icon: Map },
 ];
