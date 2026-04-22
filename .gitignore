@@ -46,3 +46,6 @@ next-env.d.ts
 # screenshots
 *.png
 .playwright-mcp/
+
+# box watcher local state
+watcher/.watcher-manifest.json

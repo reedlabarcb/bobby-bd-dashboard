@@ -8,11 +8,28 @@ Business development and prospecting dashboard for a commercial real estate brok
 
 **Built and working:** 7 pages, 9-table schema, full CRUD, 8 API routes, Box OAuth flow wired, Claude document-processing pipeline wired.
 
-**Gated on env vars** (app runs without them — AI features just show "not configured"):
-- `ANTHROPIC_API_KEY` — unlocks OM parsing + lease extraction (**the headline feature**)
-- `NEXT_PUBLIC_MAPBOX_TOKEN` — unlocks `/map`
-- `BOX_CLIENT_ID` + `BOX_CLIENT_SECRET` — unlocks Box folder sync on `/library`
-- `HUNTER_API_KEY`, `APOLLO_API_KEY`, `APIFY_API_KEY` — contact enrichment on `/contacts`
+**Core data flow:** Bobby's Box folder is the OM pipeline. Local Box Drive folder → `watcher/box-watcher.mjs` uploads new PDFs to `/api/process-document` → Claude parses → tenants + leases + property extracted → deal created with address → geocoded → pin on `/map`.
+
+**Why the watcher instead of Box OAuth:** CBRE's enterprise Box would require an admin-approved Custom OAuth App, which is slow or impossible to get. The watcher sidesteps OAuth entirely: Box Drive already syncs the folder to the local filesystem (like Golf BD does with `C:\Users\<user>\Box\CBRE Golf Resort BD`), and the watcher uploads new PDFs to Railway with a shared secret. The Box OAuth API routes (`src/app/api/box/`, `src/lib/api/box.ts`) are kept in place but not used in production — they remain available if CBRE ever clears OAuth.
+
+**Required env vars** (app fully functional only when all set):
+- `ANTHROPIC_API_KEY` — OM parsing + lease extraction + enrichment synthesis (headline feature, used everywhere AI shows up)
+- `UPLOAD_SECRET` — shared secret the Box watcher must send in `X-Upload-Secret` to upload to `/api/process-document`. Must match the watcher's `UPLOAD_SECRET`.
+
+**Optional env vars (Box OAuth path — kept as fallback):**
+- `BOX_CLIENT_ID`, `BOX_CLIENT_SECRET`, `BOX_REDIRECT_URI`, `NEXT_PUBLIC_APP_URL` — only needed if you decide to enable Box OAuth instead of the watcher.
+
+**Research stack** (recommended — powers the `/contacts` enrichment flow):
+- `APOLLO_API_KEY` — primary contact enrichment: title, company, phone, verified email, LinkedIn URL. Free tier (~10K credits/mo) covers realistic solo-broker volume.
+- `HUNTER_API_KEY` — email verification + find-by-name fallback when Apollo misses. Free tier = 25 searches/mo, paid from $49/mo.
+- Pipeline in `src/app/api/enrich-contact/route.ts`: Apollo → Hunter → Claude synthesizes a field-level diff for user approval.
+
+**Not in active use (code present, leave key blank):**
+- `APIFY_API_KEY` — LinkedIn profile deep-scraping. Only activates if Apollo returns a LinkedIn URL. Skipped because Apollo already surfaces the LinkedIn URL + basic role data, and the LinkedIn TOS for scraping is gray.
+
+**No key needed:**
+- `/map` uses MapLibre GL + CartoDB Dark Matter raster tiles (free, no signup)
+- Address geocoding uses the US Census Bureau geocoder (free, no signup, US addresses only)
 
 **Not built yet:** auth (the app is currently wide open).
 
@@ -22,7 +39,7 @@ Business development and prospecting dashboard for a commercial real estate brok
 - SQLite via `better-sqlite3` + `drizzle-orm` (local at `./data/bobby.db`, Railway at `/data/bobby.db`)
 - Tailwind 4 + shadcn/ui components (built on **base-ui** primitives, NOT Radix — see Gotchas)
 - Anthropic SDK (`@anthropic-ai/sdk`) — model: `claude-sonnet-4-20250514`
-- Mapbox GL JS 3
+- MapLibre GL JS + CartoDB Dark Matter raster tiles (no token, no signup)
 - Deploy: Railway (single service, nixpacks, SQLite volume at `/data`)
 
 ## Pages
@@ -69,6 +86,7 @@ Scripts: `dev`, `build`, `start`, `lint`, `db:migrate`, `db:seed`.
 - `src/lib/api/` — external integrations: `anthropic.ts`, `apollo.ts`, `apify.ts`, `box.ts`, `hunter.ts`, `document-processor.ts`
 - `src/components/` — feature components (`sidebar`, `deals-board`, `document-library`, `leases-table`, etc.) + `ui/` (shadcn)
 - `scripts/seed.ts` — sample data for first-run demo
+- `watcher/` — local Box Drive → Railway uploader (`box-watcher.mjs`, `start-watcher.bat`, `README.md`). Runs on Bobby's laptop.
 
 ## Railway Deploy
 

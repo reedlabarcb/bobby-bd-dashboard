@@ -1,23 +1,40 @@
 "use client";
 
-import "mapbox-gl/dist/mapbox-gl.css";
+import "maplibre-gl/dist/maplibre-gl.css";
 
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
-import mapboxgl from "mapbox-gl";
+import maplibregl, { type StyleSpecification } from "maplibre-gl";
 import {
   Layers,
   Filter,
   X,
   RotateCcw,
   MapPin,
-  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import type { Deal } from "@/lib/db/schema";
+
+const DARK_STYLE: StyleSpecification = {
+  version: 8,
+  sources: {
+    "carto-dark": {
+      type: "raster",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+      ],
+      tileSize: 256,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    },
+  },
+  layers: [{ id: "carto-dark", type: "raster", source: "carto-dark" }],
+};
 
 const STATUS_COLORS: Record<string, string> = {
   prospect: "#EAB308",
@@ -46,9 +63,9 @@ const ALL_STATUSES = ["prospect", "active", "closed", "dead"];
 
 export function DealsMap({ deals }: { deals: Deal[] }) {
   const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<mapboxgl.Map | null>(null);
-  const markersRef = useRef<mapboxgl.Marker[]>([]);
-  const popupRef = useRef<mapboxgl.Popup | null>(null);
+  const map = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
 
   const [heatmapOn, setHeatmapOn] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -58,8 +75,6 @@ export function DealsMap({ deals }: { deals: Deal[] }) {
     priceMin: "",
     priceMax: "",
   });
-
-  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
   // Derive unique property types from deals
   const propertyTypes = useMemo(() => {
@@ -131,7 +146,7 @@ export function DealsMap({ deals }: { deals: Deal[] }) {
       el.style.cursor = "pointer";
       el.style.boxShadow = `0 0 6px ${color}80`;
 
-      const marker = new mapboxgl.Marker({ element: el })
+      const marker = new maplibregl.Marker({ element: el })
         .setLngLat([deal.lng, deal.lat])
         .addTo(map.current!);
 
@@ -143,7 +158,7 @@ export function DealsMap({ deals }: { deals: Deal[] }) {
           ? deal.aiSummary.slice(0, 100) + (deal.aiSummary.length > 100 ? "..." : "")
           : "No AI summary available.";
 
-        const popup = new mapboxgl.Popup({
+        const popup = new maplibregl.Popup({
           offset: 12,
           closeButton: true,
           maxWidth: "300px",
@@ -191,7 +206,7 @@ export function DealsMap({ deals }: { deals: Deal[] }) {
     };
 
     // Update or create source
-    const src = m.getSource("deals-heat") as mapboxgl.GeoJSONSource | undefined;
+    const src = m.getSource("deals-heat") as maplibregl.GeoJSONSource | undefined;
     if (src) {
       src.setData(geojson);
     } else {
@@ -234,18 +249,16 @@ export function DealsMap({ deals }: { deals: Deal[] }) {
 
   // Initialize map
   useEffect(() => {
-    if (!token || !mapContainer.current || map.current) return;
+    if (!mapContainer.current || map.current) return;
 
-    mapboxgl.accessToken = token;
-
-    const m = new mapboxgl.Map({
+    const m = new maplibregl.Map({
       container: mapContainer.current,
-      style: "mapbox://styles/mapbox/dark-v11",
+      style: DARK_STYLE,
       center: [-98.5, 39.8],
       zoom: 4,
     });
 
-    m.addControl(new mapboxgl.NavigationControl(), "bottom-right");
+    m.addControl(new maplibregl.NavigationControl(), "bottom-right");
 
     m.on("load", () => {
       map.current = m;
@@ -258,7 +271,7 @@ export function DealsMap({ deals }: { deals: Deal[] }) {
       map.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, []);
 
   // Sync markers & heatmap on filter / toggle changes
   useEffect(() => {
@@ -266,28 +279,6 @@ export function DealsMap({ deals }: { deals: Deal[] }) {
     syncMarkers();
     syncHeatmap();
   }, [syncMarkers, syncHeatmap]);
-
-  // --- No token ---
-  if (!token) {
-    return (
-      <div className="flex items-center justify-center" style={{ height: "calc(100vh - 3rem)" }}>
-        <Card className="border-0 bg-zinc-900/60 max-w-md">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-amber-400">
-              <AlertTriangle className="h-5 w-5" />
-              Mapbox Token Not Configured
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Add <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-300">NEXT_PUBLIC_MAPBOX_TOKEN</code> to your{" "}
-              <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-300">.env.local</code> file to enable the map.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="relative -m-6" style={{ height: "calc(100vh - 0rem)" }}>

@@ -4,9 +4,21 @@ import { eq } from "drizzle-orm";
 import { processDocument } from "@/lib/api/document-processor";
 import { NextResponse } from "next/server";
 
-// Upload and process a document directly (without Box)
+// Upload and process a document directly (without Box).
+// Accepts multipart form-data uploads from the web UI or the Box watcher.
 export async function POST(request: Request) {
   try {
+    // Optional shared-secret auth for non-browser uploaders (the Box watcher).
+    // When UPLOAD_SECRET is set, any request carrying X-Upload-Secret must match.
+    // Browser uploads (without the header) are still allowed so the Library UI works.
+    const serverSecret = process.env.UPLOAD_SECRET;
+    if (serverSecret) {
+      const headerSecret = request.headers.get("x-upload-secret");
+      if (headerSecret && headerSecret !== serverSecret) {
+        return NextResponse.json({ error: "Invalid upload secret" }, { status: 401 });
+      }
+    }
+
     if (!process.env.ANTHROPIC_API_KEY) {
       return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 400 });
     }

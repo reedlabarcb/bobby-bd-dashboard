@@ -6,23 +6,6 @@ import { NextResponse } from "next/server";
 
 async function geocodeAddress(address: string, city: string, state: string): Promise<{ lat: number; lng: number } | null> {
   try {
-    // Try Mapbox geocoding first if token available
-    const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-    if (mapboxToken) {
-      const query = encodeURIComponent(`${address}, ${city}, ${state}`);
-      const res = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?access_token=${mapboxToken}&limit=1`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        if (data.features?.length > 0) {
-          const [lng, lat] = data.features[0].center;
-          return { lat, lng };
-        }
-      }
-    }
-
-    // Fallback to Census geocoding API (free, no key needed)
     const query = encodeURIComponent(`${address}, ${city}, ${state}`);
     const res = await fetch(
       `https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=${query}&benchmark=Public_AR_Current&format=json`
