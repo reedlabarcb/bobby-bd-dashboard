@@ -194,10 +194,16 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
     const maxS = maxSF ? parseInt(maxSF) : null;
 
     let list = leases.filter((l) => {
-      // Tab / time horizon
+      // Tab / time horizon — only future expirations (already-expired leases
+      // live on the "All" tab). Months-remaining is negative when past.
       if (tab !== "all") {
         const horizon = parseInt(tab);
-        if (l.monthsRemaining == null || l.monthsRemaining > horizon) return false;
+        if (
+          l.monthsRemaining == null ||
+          l.monthsRemaining < 0 ||
+          l.monthsRemaining > horizon
+        )
+          return false;
       }
 
       // Search
@@ -308,19 +314,25 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
     sortDir,
   ]);
 
-  // Summary stats (computed from all leases, not filtered)
+  // Summary stats (computed from all leases, not filtered). "Expiring in N mo"
+  // counts only future expirations — expired leases show up in Total but not in
+  // the urgency buckets.
   const stats = useMemo(() => {
     let in6 = 0,
       in12 = 0,
-      in24 = 0;
+      in24 = 0,
+      expired = 0;
     for (const l of leases) {
-      if (l.monthsRemaining != null) {
-        if (l.monthsRemaining <= 6) in6++;
-        if (l.monthsRemaining <= 12) in12++;
-        if (l.monthsRemaining <= 24) in24++;
+      if (l.monthsRemaining == null) continue;
+      if (l.monthsRemaining < 0) {
+        expired++;
+        continue;
       }
+      if (l.monthsRemaining <= 6) in6++;
+      if (l.monthsRemaining <= 12) in12++;
+      if (l.monthsRemaining <= 24) in24++;
     }
-    return { in6, in12, in24, total: leases.length };
+    return { in6, in12, in24, expired, total: leases.length };
   }, [leases]);
 
   function toggleSort(field: SortField) {
