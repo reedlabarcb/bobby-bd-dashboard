@@ -153,7 +153,64 @@ sqlite.exec(`
     last_sync_at TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS buildings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    address TEXT NOT NULL,
+    city TEXT,
+    state TEXT DEFAULT 'CA',
+    submarket TEXT,
+    district TEXT,
+    property_class TEXT,
+    property_subtype TEXT,
+    property_size_sf INTEGER,
+    landlord_name TEXT,
+    lat REAL,
+    lng REAL,
+    source TEXT,
+    source_file TEXT,
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_buildings_address ON buildings(address);
+  CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);
+  CREATE INDEX IF NOT EXISTS idx_contacts_name_company ON contacts(name, company);
 `);
+
+// Column additions for existing tables. SQLite has no `ADD COLUMN IF NOT EXISTS`,
+// so we attempt each ALTER TABLE and swallow the "duplicate column" error.
+function addColumnIfMissing(table: string, column: string, def: string) {
+  try {
+    sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${def}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/duplicate column name/i.test(msg)) throw err;
+  }
+}
+
+// contacts — richer contact data
+addColumnIfMissing("contacts", "direct_phone", "TEXT");
+addColumnIfMissing("contacts", "mobile_phone", "TEXT");
+addColumnIfMissing("contacts", "business_type", "TEXT");
+addColumnIfMissing("contacts", "source_file", "TEXT");
+
+// leases — fields Bob tracks that OM-parsing didn't populate
+addColumnIfMissing("leases", "building_id", "INTEGER REFERENCES buildings(id)");
+addColumnIfMissing("leases", "floor", "TEXT");
+addColumnIfMissing("leases", "effective_rent", "REAL");
+addColumnIfMissing("leases", "transaction_type", "TEXT");
+addColumnIfMissing("leases", "ti_allowance", "REAL");
+addColumnIfMissing("leases", "free_rent_months", "TEXT");
+addColumnIfMissing("leases", "escalation_percent", "REAL");
+addColumnIfMissing("leases", "is_sublease", "INTEGER DEFAULT 0");
+addColumnIfMissing("leases", "tenant_agent", "TEXT");
+addColumnIfMissing("leases", "tenant_agency", "TEXT");
+addColumnIfMissing("leases", "listing_agent", "TEXT");
+addColumnIfMissing("leases", "listing_agency", "TEXT");
+addColumnIfMissing("leases", "notes", "TEXT");
 
 console.log("Database migrated successfully at:", dbPath);
 sqlite.close();

@@ -6,13 +6,41 @@ export const contacts = sqliteTable("contacts", {
   name: text("name").notNull(),
   email: text("email"),
   phone: text("phone"),
+  directPhone: text("direct_phone"),
+  mobilePhone: text("mobile_phone"),
   company: text("company"),
   title: text("title"),
   type: text("type", { enum: ["buyer", "seller", "broker", "lender", "other"] }).default("other"),
+  businessType: text("business_type"), // industry classification from Master Comps
   source: text("source"),
+  sourceFile: text("source_file"),
   tags: text("tags"), // JSON array stored as text
   city: text("city"),
   state: text("state"),
+  notes: text("notes"),
+  createdAt: text("created_at").default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").default(sql`(datetime('now'))`),
+});
+
+// Buildings are first-class entities — many tenants per building, many leases
+// roll over at different times. Buildings are deduped across imports by
+// normalized address.
+export const buildings = sqliteTable("buildings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name"),
+  address: text("address").notNull(),
+  city: text("city"),
+  state: text("state").default("CA"),
+  submarket: text("submarket"), // e.g. "North County"
+  district: text("district"), // e.g. "Carlsbad"
+  propertyClass: text("property_class"), // A, B, C
+  propertySubtype: text("property_subtype"), // General Office, Life Science, Industrial, etc.
+  propertySizeSf: integer("property_size_sf"),
+  landlordName: text("landlord_name"),
+  lat: real("lat"),
+  lng: real("lng"),
+  source: text("source"),
+  sourceFile: text("source_file"),
   notes: text("notes"),
   createdAt: text("created_at").default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").default(sql`(datetime('now'))`),
@@ -107,9 +135,10 @@ export const tenants = sqliteTable("tenants", {
 export const leases = sqliteTable("leases", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   tenantId: integer("tenant_id").references(() => tenants.id).notNull(),
+  buildingId: integer("building_id").references(() => buildings.id),
   documentId: integer("document_id").references(() => documents.id),
   dealId: integer("deal_id").references(() => deals.id),
-  // Property info
+  // Property info (denormalized from building for now — keeps queries simple)
   propertyName: text("property_name"),
   propertyAddress: text("property_address"),
   propertyCity: text("property_city"),
@@ -117,18 +146,30 @@ export const leases = sqliteTable("leases", {
   propertyType: text("property_type"),
   // Lease terms
   suiteUnit: text("suite_unit"),
+  floor: text("floor"),
   squareFeet: integer("square_feet"),
   leaseStartDate: text("lease_start_date"),
   leaseEndDate: text("lease_end_date"), // THE KEY FIELD — expiration date
   monthsRemaining: integer("months_remaining"), // computed on extraction
   rentPsf: real("rent_psf"), // rent per square foot
+  effectiveRent: real("effective_rent"), // net of concessions
   annualRent: real("annual_rent"),
   leaseType: text("lease_type"), // NNN, gross, modified_gross, ground
+  transactionType: text("transaction_type"), // New Lease, Renewal, Expansion, Sublease
+  tiAllowance: real("ti_allowance"), // tenant improvement allowance $/SF
+  freeRentMonths: text("free_rent_months"), // e.g. "4 Mo (1, 2, 13, 14)"
+  escalationPercent: real("escalation_percent"), // e.g. 0.03 for 3%
   options: text("options"), // renewal options, expansion rights, etc.
-  escalations: text("escalations"), // rent escalation terms
+  escalations: text("escalations"), // rent escalation terms (freeform)
+  isSublease: integer("is_sublease").default(0), // 0=no, 1=yes
+  tenantAgent: text("tenant_agent"), // broker(s) on tenant side, pipe-separated
+  tenantAgency: text("tenant_agency"),
+  listingAgent: text("listing_agent"), // broker(s) on landlord side, pipe-separated
+  listingAgency: text("listing_agency"),
   // Source
   sourceFile: text("source_file"),
   confidence: text("confidence"), // high, medium, low — how confident Claude is in extraction
+  notes: text("notes"),
   createdAt: text("created_at").default(sql`(datetime('now'))`),
 });
 
@@ -149,6 +190,8 @@ export type Tenant = typeof tenants.$inferSelect;
 export type NewTenant = typeof tenants.$inferInsert;
 export type Lease = typeof leases.$inferSelect;
 export type NewLease = typeof leases.$inferInsert;
+export type Building = typeof buildings.$inferSelect;
+export type NewBuilding = typeof buildings.$inferInsert;
 export type BoxConfig = typeof boxConfig.$inferSelect;
 export type Contact = typeof contacts.$inferSelect;
 export type NewContact = typeof contacts.$inferInsert;

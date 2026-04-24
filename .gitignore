@@ -49,3 +49,6 @@ next-env.d.ts
 
 # box watcher local state
 watcher/.watcher-manifest.json
+
+# ad-hoc import staging (extracted XLSX/PDF files before upload)
+/tmp-import/
