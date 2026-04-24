@@ -22,7 +22,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -512,18 +511,30 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
         </Card>
       </div>
 
-      {/* Time horizon tabs */}
-      <Tabs
-        value={tab}
-        onValueChange={(v) => setTab(v ?? "6")}
-      >
-        <TabsList variant="line">
-          <TabsTrigger value="6">Expiring 6 mo</TabsTrigger>
-          <TabsTrigger value="12">Expiring 12 mo</TabsTrigger>
-          <TabsTrigger value="24">Expiring 24 mo</TabsTrigger>
-          <TabsTrigger value="all">All Leases</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      {/* Time horizon tabs — plain buttons (base-ui Tabs was flaky in controlled mode) */}
+      <div className="flex flex-wrap gap-1 border-b border-border">
+        {(
+          [
+            { v: "6", l: `Expiring 6 mo (${stats.in6})` },
+            { v: "12", l: `Expiring 12 mo (${stats.in12})` },
+            { v: "24", l: `Expiring 24 mo (${stats.in24})` },
+            { v: "all", l: `All Leases (${stats.total})` },
+          ] as const
+        ).map(({ v, l }) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setTab(v)}
+            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              tab === v
+                ? "text-foreground border-foreground"
+                : "text-muted-foreground border-transparent hover:text-foreground hover:border-muted-foreground/50"
+            }`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-end gap-2">
