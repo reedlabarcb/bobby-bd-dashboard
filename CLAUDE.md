@@ -31,7 +31,7 @@ Business development and prospecting dashboard for a commercial real estate brok
 - `/map` uses MapLibre GL + CartoDB Dark Matter raster tiles (free, no signup)
 - Address geocoding uses the US Census Bureau geocoder (free, no signup, US addresses only)
 
-**Not built yet:** auth (the app is currently wide open).
+**Auth:** single-user shared-password gate via `src/proxy.ts` (Next 16 renamed `middleware.ts` → `proxy.ts`; uses Node runtime). Set `APP_PASSWORD` (the password Bobby types) and `AUTH_SECRET` (≥16 chars, used to sign the session cookie via HMAC-SHA256). If either is unset, the proxy logs once and lets requests through — useful for local dev. The Box-Drive watcher's `/api/process-document` endpoint bypasses the gate (it has its own `UPLOAD_SECRET`). Cookie TTL is 30 days, HttpOnly + Secure in prod. Logout button lives at the bottom of the sidebar.
 
 ## Stack
 

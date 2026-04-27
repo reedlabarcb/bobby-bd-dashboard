@@ -11,6 +11,7 @@ import {
   Map,
   FolderSearch,
   CalendarClock,
+  LogOut,
 } from "lucide-react";
 
 const nav = [
@@ -26,6 +27,10 @@ const nav = [
 
 export function Sidebar() {
   const pathname = usePathname();
+
+  // Login screen shouldn't show the nav (and clicks on it would just bounce
+  // back through the auth proxy).
+  if (pathname === "/login") return null;
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r border-border bg-card flex flex-col">
@@ -56,7 +61,18 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="p-4 border-t border-border">
+      <div className="p-4 border-t border-border space-y-2">
+        <button
+          type="button"
+          onClick={async () => {
+            await fetch("/api/logout", { method: "POST" });
+            window.location.assign("/login");
+          }}
+          className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <LogOut className="h-3.5 w-3.5" />
+          Sign out
+        </button>
         <div className="text-xs text-muted-foreground">
           Bobby BD Dashboard v0.1
         </div>
