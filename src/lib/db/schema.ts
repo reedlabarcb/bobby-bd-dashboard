@@ -10,7 +10,7 @@ export const contacts = sqliteTable("contacts", {
   mobilePhone: text("mobile_phone"),
   company: text("company"),
   title: text("title"),
-  type: text("type", { enum: ["buyer", "seller", "broker", "lender", "other"] }).default("other"),
+  type: text("type", { enum: ["buyer", "seller", "broker", "lender", "landlord", "other"] }).default("other"),
   businessType: text("business_type"), // industry classification from Master Comps
   source: text("source"),
   sourceFile: text("source_file"),
@@ -37,6 +37,7 @@ export const buildings = sqliteTable("buildings", {
   propertySubtype: text("property_subtype"), // General Office, Life Science, Industrial, etc.
   propertySizeSf: integer("property_size_sf"),
   landlordName: text("landlord_name"),
+  landlordContactId: integer("landlord_contact_id").references(() => contacts.id),
   lat: real("lat"),
   lng: real("lng"),
   source: text("source"),

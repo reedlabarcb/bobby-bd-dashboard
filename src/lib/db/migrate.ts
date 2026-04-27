@@ -197,6 +197,9 @@ addColumnIfMissing("contacts", "mobile_phone", "TEXT");
 addColumnIfMissing("contacts", "business_type", "TEXT");
 addColumnIfMissing("contacts", "source_file", "TEXT");
 
+// buildings — promote landlord to a contact (option C)
+addColumnIfMissing("buildings", "landlord_contact_id", "INTEGER REFERENCES contacts(id)");
+
 // leases — fields Bob tracks that OM-parsing didn't populate
 addColumnIfMissing("leases", "building_id", "INTEGER REFERENCES buildings(id)");
 addColumnIfMissing("leases", "floor", "TEXT");

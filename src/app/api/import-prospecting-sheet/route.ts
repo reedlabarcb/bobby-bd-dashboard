@@ -30,12 +30,13 @@ function normAddr(addr: string | null | undefined): string {
 //   "Robert Stewart (President CEO)"        → [{name: "Robert Stewart", title: "President CEO"}]
 //   "Darren D Ceasar (President) - Jamie"   → [{name: "Darren D Ceasar", title: "President"}, {name: "Jamie"}]
 //   "Niall Casey (Co Owner) ; Mike Cordoso" → [{name: "Niall Casey", title: "Co Owner"}, {name: "Mike Cordoso"}]
+//   "T Van Betten | Aric Starck"            → [{name: "T Van Betten"}, {name: "Aric Starck"}]
 function splitMultiName(raw: string | null | undefined): { name: string; title?: string }[] {
   if (!raw) return [];
   const str = String(raw).trim();
   if (!str) return [];
-  // Split on ; or space-padded " - " (dash surrounded by spaces — avoids hyphenated names)
-  const parts = str.split(/\s*;\s*|\s+-\s+/);
+  // Split on ; or | or space-padded " - " (dash surrounded by spaces — avoids hyphenated names)
+  const parts = str.split(/\s*;\s*|\s*\|\s*|\s+-\s+/);
   return parts
     .map((p) => {
       const m = p.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
@@ -110,6 +111,25 @@ function toInt(v: unknown): number | null {
   return Number.isFinite(n) ? Math.round(n) : null;
 }
 
+function toFloat(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(String(v).replace(/[$,%\s]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+// "Class B" / "B" / "class b" → "B". Trim everything else.
+function normPropertyClass(raw: string | null): string | null {
+  if (!raw) return null;
+  const s = String(raw).trim().replace(/^class\s+/i, "");
+  return s || null;
+}
+
+// Sublease cell can be "Y"/"N"/"Yes"/"No"/null. Returns 1 or 0.
+function parseSublease(raw: string | null): number {
+  if (!raw) return 0;
+  return /^(y|yes|true|1|sub)/i.test(String(raw).trim()) ? 1 : 0;
+}
+
 function monthsBetween(from: Date, to: Date): number {
   return (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
 }
@@ -127,8 +147,11 @@ function upsertBuilding(
     name: string | null;
     address: string;
     city: string | null;
+    propertyClass: string | null;
+    propertySubtype: string | null;
     propertySizeSf: number | null;
     landlordName: string | null;
+    landlordContactId: number | null;
   },
   ctx: RowContext
 ): number {
@@ -147,8 +170,12 @@ function upsertBuilding(
     const patch: Partial<typeof buildings.$inferInsert> = {};
     if (!match.name && row.name) patch.name = row.name;
     if (!match.city && row.city) patch.city = row.city;
+    if (!match.propertyClass && row.propertyClass) patch.propertyClass = row.propertyClass;
+    if (!match.propertySubtype && row.propertySubtype) patch.propertySubtype = row.propertySubtype;
     if (!match.propertySizeSf && row.propertySizeSf) patch.propertySizeSf = row.propertySizeSf;
     if (!match.landlordName && row.landlordName) patch.landlordName = row.landlordName;
+    if (!match.landlordContactId && row.landlordContactId)
+      patch.landlordContactId = row.landlordContactId;
     if (!match.district && row.city) patch.district = row.city;
     if (Object.keys(patch).length > 0) {
       patch.updatedAt = new Date().toISOString().replace("T", " ").split(".")[0];
@@ -164,8 +191,11 @@ function upsertBuilding(
       address: row.address,
       city: row.city,
       district: row.city,
+      propertyClass: row.propertyClass,
+      propertySubtype: row.propertySubtype,
       propertySizeSf: row.propertySizeSf,
       landlordName: row.landlordName,
+      landlordContactId: row.landlordContactId,
       source: "prospecting-sheet",
       sourceFile: ctx.sourceFile,
     })
@@ -174,10 +204,43 @@ function upsertBuilding(
   return inserted.id;
 }
 
-function upsertTenantCompany(name: string): number {
+function upsertTenantCompany(name: string, industry: string | null): number {
   const existing = db.select().from(tenants).where(eq(tenants.name, name)).get();
-  if (existing) return existing.id;
-  const inserted = db.insert(tenants).values({ name }).returning().get();
+  if (existing) {
+    if (industry && !existing.industry) {
+      db.update(tenants).set({ industry }).where(eq(tenants.id, existing.id)).run();
+    }
+    return existing.id;
+  }
+  const inserted = db.insert(tenants).values({ name, industry }).returning().get();
+  return inserted.id;
+}
+
+// Landlord entities don't have email/phone and the landlord name IS the company,
+// so the general upsertContact (which matches by email or name+company) won't
+// dedup them correctly. Match by case-insensitive name within type='landlord'.
+function upsertLandlordContact(name: string, ctx: RowContext): number {
+  const key = name.trim().toLowerCase();
+  if (!key) throw new Error("landlord name required");
+  const match = db
+    .select()
+    .from(contacts)
+    .where(eq(contacts.type, "landlord"))
+    .all()
+    .find((c) => c.name.trim().toLowerCase() === key);
+  if (match) return match.id;
+  const inserted = db
+    .insert(contacts)
+    .values({
+      name: name.trim(),
+      type: "landlord",
+      company: name.trim(),
+      tags: JSON.stringify(["landlord"]),
+      source: `Import: ${ctx.sourceFile}`,
+      sourceFile: ctx.sourceFile,
+    })
+    .returning()
+    .get();
   return inserted.id;
 }
 
@@ -336,6 +399,7 @@ export async function POST(request: Request) {
       leasesInserted: 0,
       leasesUpdated: 0,
       contactsCreated: 0,
+      landlordContactsCreated: 0,
       contactsUpdated: 0,
       errors: [] as string[],
     };
@@ -345,10 +409,19 @@ export async function POST(request: Request) {
       const r = db.select({ c: sql<number>`count(*)` }).from(table).get();
       return Number(r?.c ?? 0);
     };
+    const countLandlords = (): number => {
+      const r = db
+        .select({ c: sql<number>`count(*)` })
+        .from(contacts)
+        .where(eq(contacts.type, "landlord"))
+        .get();
+      return Number(r?.c ?? 0);
+    };
     const beforeBuildings = countOf(buildings);
     const beforeTenants = countOf(tenants);
     const beforeLeases = countOf(leases);
     const beforeContacts = countOf(contacts);
+    const beforeLandlords = countLandlords();
 
     for (const sheetName of wb.SheetNames) {
       const ws = wb.Sheets[sheetName];
@@ -366,31 +439,45 @@ export async function POST(request: Request) {
           }
 
           const propertyName = str(row, "Property Name", "property_name", "Building Name");
-          const city = str(row, "CITY", "City", "city");
-          const propertySize = toInt(str(row, "Property Size", "property_size"));
+          // LXD uses "District" (e.g. "Carlsbad") where Centerpoint uses "CITY"
+          const city = str(row, "CITY", "City", "city", "District");
+          const propertySize = toInt(str(row, "Property Size", "property_size", "Building Size"));
+          const propertyClass = normPropertyClass(str(row, "Property Class", "Class"));
+          const propertySubtype = str(row, "Property Subtype", "Subtype");
           const lessor = str(row, "Lessor", "Landlord");
           const tenantAgency = str(row, "Tenant Agency");
           const listingAgency = str(row, "Listing Agency");
 
-          // 1. Building
+          // 1a. Landlord contact (option C — landlord is also a contact row)
+          const landlordContactId = lessor ? upsertLandlordContact(lessor, ctx) : null;
+
+          // 1b. Building
           const buildingId = upsertBuilding(
             {
               name: propertyName,
               address,
               city,
+              propertyClass,
+              propertySubtype,
               propertySizeSf: propertySize,
               landlordName: lessor,
+              landlordContactId,
             },
             ctx
           );
 
-          // 2. Tenant company (if present)
+          // 2. Tenant company (if present). LXD "Tags" column carries the industry.
           const tenantName = str(row, "Tenant");
           if (!tenantName) {
             stats.rowsSkipped++;
             continue;
           }
-          const tenantId = upsertTenantCompany(tenantName);
+          // LXD "Tags" cells often have a `| Complete` data-validation suffix; strip it.
+          const industryRaw = str(row, "Tags", "Industry");
+          const industry = industryRaw
+            ? industryRaw.replace(/\s*\|\s*complete\s*$/i, "").trim() || null
+            : null;
+          const tenantId = upsertTenantCompany(tenantName, industry);
 
           // 3. Lease
           const startDate = normDate(row["Signed Date"] ?? row["signed_date"]);
@@ -402,6 +489,25 @@ export async function POST(request: Request) {
           const tenantAgentRaw = str(row, "Tenant Agent(s)");
           const listingAgentRaw = str(row, "Listing Agent(s)");
           const notes = str(row, "Notes");
+
+          // LXD-specific lease economics. Source units are $/sf/MONTH; convert to
+          // annual $/sf to match CRE convention and the rest of the schema.
+          const baseRentMonthly = toFloat(row["Base Rent Monthly"] ?? row["base_rent_monthly"]);
+          const effectiveRentMonthly = toFloat(
+            row["Effective Rent - Monthly"] ?? row["effective_rent_monthly"]
+          );
+          const rentPsf = baseRentMonthly != null ? +(baseRentMonthly * 12).toFixed(4) : null;
+          const effectiveRent =
+            effectiveRentMonthly != null ? +(effectiveRentMonthly * 12).toFixed(4) : null;
+          const annualRent =
+            rentPsf != null && areaLeased != null ? Math.round(rentPsf * areaLeased) : null;
+          const leaseType = str(row, "Rate Type", "Lease Type");
+          const tiAllowance = toFloat(row["TI Allowance"] ?? row["ti_allowance"]);
+          const freeRentMonthsRaw = str(row, "Free Rent Months", "free_rent_months");
+          const escalationPercent = toFloat(
+            row["Escalation Percent"] ?? row["escalation_percent"]
+          );
+          const isSublease = parseSublease(str(row, "Sublease"));
 
           let monthsRemaining: number | null = null;
           if (endDate) {
@@ -424,7 +530,15 @@ export async function POST(request: Request) {
               leaseStartDate: startDate,
               leaseEndDate: endDate,
               monthsRemaining,
+              rentPsf,
+              effectiveRent,
+              annualRent,
+              leaseType,
               transactionType,
+              tiAllowance,
+              freeRentMonths: freeRentMonthsRaw,
+              escalationPercent,
+              isSublease,
               tenantAgent: tenantAgentRaw,
               tenantAgency,
               listingAgent: listingAgentRaw,
@@ -436,7 +550,11 @@ export async function POST(request: Request) {
             { tenantId, buildingId, startDate }
           );
 
-          // 4. Contacts — tenant decision-maker(s)
+          // 4. Contacts — tenant decision-maker(s).
+          // Centerpoint has "Tenant Contact" + Email + Contact Information.
+          // LXD has no decision-maker column at all — "Name (Contact)" looks similar
+          // but is just `Tenant Agent | Listing Agent` rolled up, and would create
+          // duplicate broker rows here. So we deliberately don't fall back to it.
           const people = splitMultiName(str(row, "Tenant Contact"));
           const emails = splitEmails(str(row, "Email"));
           const phones = parsePhones(str(row, "Contact Information"));
@@ -503,6 +621,7 @@ export async function POST(request: Request) {
     stats.tenantsCreated = afterTenants - beforeTenants;
     stats.leasesInserted = afterLeases - beforeLeases;
     stats.contactsCreated = afterContacts - beforeContacts;
+    stats.landlordContactsCreated = countLandlords() - beforeLandlords;
 
     db.update(uploads)
       .set({
