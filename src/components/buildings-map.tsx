@@ -277,8 +277,9 @@ export function BuildingsMap({ buildings }: { buildings: BuildingPin[] }) {
   // Initialize map. Center over North County SD (Carlsbad-ish), zoom 9.
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
+    const container = mapContainer.current;
     const m = new maplibregl.Map({
-      container: mapContainer.current,
+      container,
       style: DARK_STYLE,
       center: [-117.25, 33.15],
       zoom: 9,
@@ -295,7 +296,15 @@ export function BuildingsMap({ buildings }: { buildings: BuildingPin[] }) {
       syncMarkers();
       syncHeatmap();
     });
+    // The map's <div> often measures 0×0 the moment MapLibre initializes
+    // (between hydration and final layout). MapLibre creates a 0-sized
+    // canvas in that case and never recovers without an explicit resize.
+    // ResizeObserver re-fires every time the layout shifts — calling
+    // resize() is cheap and idempotent.
+    const ro = new ResizeObserver(() => m.resize());
+    ro.observe(container);
     return () => {
+      ro.disconnect();
       m.remove();
       map.current = null;
     };
