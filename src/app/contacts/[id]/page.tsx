@@ -8,12 +8,6 @@ import Link from "next/link";
 import { format } from "date-fns";
 import {
   ArrowLeft,
-  Mail,
-  Phone,
-  Building2,
-  MapPin,
-  Briefcase,
-  Calendar,
   PhoneCall,
   MessageSquare,
   Users,
@@ -28,15 +22,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { EnrichButton } from "@/components/enrich-button";
 import { AddActivityDialog } from "@/components/add-activity-dialog";
+import { EditContactCard } from "@/components/edit-contact-card";
 
 const TYPE_COLORS: Record<string, string> = {
   buyer: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
   seller: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   broker: "bg-amber-500/20 text-amber-400 border-amber-500/30",
   lender: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+  landlord: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
   other: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
 };
 
@@ -53,15 +48,6 @@ const ACTIVITY_COLORS: Record<string, string> = {
   meeting: "bg-amber-500/20 text-amber-400",
   note: "bg-zinc-500/20 text-zinc-400",
 };
-
-function formatDate(d: string | null) {
-  if (!d) return "-";
-  try {
-    return format(new Date(d), "MMM d, yyyy");
-  } catch {
-    return d;
-  }
-}
 
 function formatDateTime(d: string | null) {
   if (!d) return "-";
@@ -94,8 +80,6 @@ export default async function ContactDetailPage({
     .orderBy(desc(activities.date))
     .all();
 
-  const location = [contact.city, contact.state].filter(Boolean).join(", ");
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -107,13 +91,9 @@ export default async function ContactDetailPage({
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight">
-              {contact.name}
-            </h1>
+            <h1 className="text-2xl font-bold tracking-tight">{contact.name}</h1>
             <Badge
-              className={
-                TYPE_COLORS[contact.type || "other"] || TYPE_COLORS.other
-              }
+              className={TYPE_COLORS[contact.type || "other"] || TYPE_COLORS.other}
             >
               {contact.type || "other"}
             </Badge>
@@ -131,82 +111,7 @@ export default async function ContactDetailPage({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Contact Info Card */}
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle>Contact Info</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {contact.email && (
-              <div className="flex items-center gap-3">
-                <Mail className="size-4 text-muted-foreground shrink-0" />
-                <a
-                  href={`mailto:${contact.email}`}
-                  className="text-sm text-blue-400 hover:underline truncate"
-                >
-                  {contact.email}
-                </a>
-              </div>
-            )}
-            {contact.phone && (
-              <div className="flex items-center gap-3">
-                <Phone className="size-4 text-muted-foreground shrink-0" />
-                <span className="text-sm">{contact.phone}</span>
-              </div>
-            )}
-            {contact.company && (
-              <div className="flex items-center gap-3">
-                <Building2 className="size-4 text-muted-foreground shrink-0" />
-                <span className="text-sm">{contact.company}</span>
-              </div>
-            )}
-            {contact.title && (
-              <div className="flex items-center gap-3">
-                <Briefcase className="size-4 text-muted-foreground shrink-0" />
-                <span className="text-sm">{contact.title}</span>
-              </div>
-            )}
-            {location && (
-              <div className="flex items-center gap-3">
-                <MapPin className="size-4 text-muted-foreground shrink-0" />
-                <span className="text-sm">{location}</span>
-              </div>
-            )}
-            {contact.source && (
-              <div className="flex items-center gap-3">
-                <Calendar className="size-4 text-muted-foreground shrink-0" />
-                <span className="text-sm text-muted-foreground">
-                  Source: {contact.source}
-                </span>
-              </div>
-            )}
-
-            <Separator />
-
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">
-                Created {formatDate(contact.createdAt)}
-              </p>
-              {contact.updatedAt && contact.updatedAt !== contact.createdAt && (
-                <p className="text-xs text-muted-foreground">
-                  Updated {formatDate(contact.updatedAt)}
-                </p>
-              )}
-            </div>
-
-            {contact.notes && (
-              <>
-                <Separator />
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">
-                    Notes
-                  </p>
-                  <p className="text-sm whitespace-pre-wrap">{contact.notes}</p>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        <EditContactCard contact={contact} />
 
         {/* Activity Timeline */}
         <Card className="lg:col-span-2">
@@ -230,12 +135,10 @@ export default async function ContactDetailPage({
               <div className="space-y-0">
                 {contactActivities.map((activity, idx) => (
                   <div key={activity.id} className="flex gap-4">
-                    {/* Timeline line + icon */}
                     <div className="flex flex-col items-center">
                       <div
                         className={`flex items-center justify-center size-8 rounded-full shrink-0 ${
-                          ACTIVITY_COLORS[activity.type] ||
-                          ACTIVITY_COLORS.note
+                          ACTIVITY_COLORS[activity.type] || ACTIVITY_COLORS.note
                         }`}
                       >
                         {ACTIVITY_ICONS[activity.type] || ACTIVITY_ICONS.note}
@@ -244,7 +147,6 @@ export default async function ContactDetailPage({
                         <div className="w-px flex-1 bg-border/50 my-1" />
                       )}
                     </div>
-                    {/* Content */}
                     <div className="pb-6 pt-1 flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium capitalize">
@@ -252,12 +154,8 @@ export default async function ContactDetailPage({
                         </span>
                         {activity.subject && (
                           <>
-                            <span className="text-muted-foreground">
-                              &middot;
-                            </span>
-                            <span className="text-sm truncate">
-                              {activity.subject}
-                            </span>
+                            <span className="text-muted-foreground">&middot;</span>
+                            <span className="text-sm truncate">{activity.subject}</span>
                           </>
                         )}
                       </div>
