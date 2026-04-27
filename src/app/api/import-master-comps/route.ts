@@ -8,13 +8,11 @@ import {
   countTable,
   monthsBetween,
   normDate,
+  normLeaseType,
   normPropertyClass,
-  parsePhones,
   parseSublease,
   pickStr,
   splitBrokers,
-  splitEmails,
-  splitMultiName,
   toFloat,
   toInt,
   upsertBuilding,
@@ -25,10 +23,32 @@ import {
   type RowContext,
 } from "@/lib/import-helpers";
 
-// Centerpoint + LXD prospecting-sheet importer. The two schemas overlap heavily
-// — column aliases below cover both.
+// Importer for the "Master Office Lease Comps — All Tenants Decision Makers"
+// dataset. Schema differs from the prospecting sheets:
+//   - Rents stored under "Actual Gross Base Rent" / "Actual Net Base Rent" /
+//     "Effective Rent" (all $/sf/MONTH).
+//   - Decision-maker contacts split into DM1_/DM2_/DM3_ column families with
+//     Name, Title, LinkedIn, Phone, Email each.
+//   - Leasing/Tenant agents are in dedicated company + contact columns.
+//   - Landlord lives in "History Building Owner Co of Record".
+//   - Rent type is a coded vocabulary (+E, +U, NNN, FS, MG, G) — normalized
+//     by normLeaseType.
 
 type Row = Record<string, unknown>;
+
+function dmEmail(raw: string | null): string | null {
+  if (!raw) return null;
+  const s = raw.trim();
+  if (!s || s.toUpperCase() === "NULL" || !s.includes("@")) return null;
+  return s.toLowerCase();
+}
+
+function dmStr(raw: string | null): string | null {
+  if (!raw) return null;
+  const s = raw.trim();
+  if (!s || s.toUpperCase() === "NULL") return null;
+  return s;
+}
 
 export async function POST(request: Request) {
   try {
@@ -65,6 +85,8 @@ export async function POST(request: Request) {
       leasesInserted: 0,
       contactsCreated: 0,
       landlordContactsCreated: 0,
+      decisionMakersExtracted: 0,
+      brokersExtracted: 0,
       errors: [] as string[],
     };
 
@@ -82,21 +104,21 @@ export async function POST(request: Request) {
 
       for (const row of rows) {
         try {
-          const address = pickStr(row, "Address", "address");
+          const address = pickStr(row, "Address Line 1", "Address");
           if (!address) {
             stats.rowsSkipped++;
             continue;
           }
 
-          const propertyName = pickStr(row, "Property Name", "property_name", "Building Name");
-          // LXD uses "District" (e.g. "Carlsbad") where Centerpoint uses "CITY"
-          const city = pickStr(row, "CITY", "City", "city", "District");
-          const propertySize = toInt(pickStr(row, "Property Size", "property_size", "Building Size"));
-          const propertyClass = normPropertyClass(pickStr(row, "Property Class", "Class"));
-          const propertySubtype = pickStr(row, "Property Subtype", "Subtype");
-          const lessor = pickStr(row, "Lessor", "Landlord");
-          const tenantAgency = pickStr(row, "Tenant Agency");
-          const listingAgency = pickStr(row, "Listing Agency");
+          const propertyName = pickStr(row, "Building Name");
+          // Master Comps' "Market" doubles as the city for North County buildings.
+          const city = pickStr(row, "Market ", "Market", "City");
+          const propertyClass = normPropertyClass(pickStr(row, "Building Class ", "Building Class"));
+          const lessor = pickStr(row, "History Building Owner Co of Record", "Landlord");
+          const tenantAgentRaw = pickStr(row, "Tenant Agent Contact");
+          const tenantAgency = pickStr(row, "Tenant Agent Company");
+          const listingAgentRaw = pickStr(row, "Leasing Agent Contact");
+          const listingAgency = pickStr(row, "Leasing Agent Company Name");
 
           const landlordContactId = lessor ? upsertLandlordContact(lessor, ctx) : null;
 
@@ -106,53 +128,43 @@ export async function POST(request: Request) {
               address,
               city,
               propertyClass,
-              propertySubtype,
-              propertySizeSf: propertySize,
+              propertySubtype: null,
+              propertySizeSf: null,
               landlordName: lessor,
               landlordContactId,
             },
             ctx
           );
 
-          const tenantName = pickStr(row, "Tenant");
+          const tenantName = pickStr(row, "Tenant Name");
           if (!tenantName) {
             stats.rowsSkipped++;
             continue;
           }
-          // LXD "Tags" cells often have a `| Complete` data-validation suffix; strip it.
-          const industryRaw = pickStr(row, "Tags", "Industry");
-          const industry = industryRaw
-            ? industryRaw.replace(/\s*\|\s*complete\s*$/i, "").trim() || null
-            : null;
+          const industry = pickStr(row, "Tenant Business Type");
           const tenantId = upsertTenantCompany(tenantName, industry);
 
-          const startDate = normDate(row["Signed Date"] ?? row["signed_date"]);
-          const endDate = normDate(row["End Date"] ?? row["end_date"]);
-          const areaLeased = toInt(pickStr(row, "Area Leased"));
-          const floor = pickStr(row, "Floor");
+          const startDate = normDate(row["Date Leased"] ?? row["Date Occupied"]);
+          const endDate = normDate(row["Date Lease Expires"]);
+          const areaLeased = toInt(pickStr(row, "Leased SF"));
           const suite = pickStr(row, "Suite");
+          const floor = pickStr(row, "Floor");
           const transactionType = pickStr(row, "Lease Transaction Type");
-          const tenantAgentRaw = pickStr(row, "Tenant Agent(s)");
-          const listingAgentRaw = pickStr(row, "Listing Agent(s)");
-          const notes = pickStr(row, "Notes");
+          const notes = pickStr(row, "Deal Point Comment");
 
-          // LXD lease economics: $/sf/MONTH → annual $/sf to match CRE convention.
-          const baseRentMonthly = toFloat(row["Base Rent Monthly"] ?? row["base_rent_monthly"]);
-          const effectiveRentMonthly = toFloat(
-            row["Effective Rent - Monthly"] ?? row["effective_rent_monthly"]
-          );
-          const rentPsf = baseRentMonthly != null ? +(baseRentMonthly * 12).toFixed(4) : null;
+          // Rents are $/sf/month → annual.
+          const grossMonthly = toFloat(row["Actual Gross Base Rent"]);
+          const effectiveMonthly = toFloat(row["Effective Rent"]);
+          const rentPsf = grossMonthly != null ? +(grossMonthly * 12).toFixed(4) : null;
           const effectiveRent =
-            effectiveRentMonthly != null ? +(effectiveRentMonthly * 12).toFixed(4) : null;
+            effectiveMonthly != null ? +(effectiveMonthly * 12).toFixed(4) : null;
           const annualRent =
             rentPsf != null && areaLeased != null ? Math.round(rentPsf * areaLeased) : null;
-          const leaseType = pickStr(row, "Rate Type", "Lease Type");
-          const tiAllowance = toFloat(row["TI Allowance"] ?? row["ti_allowance"]);
-          const freeRentMonthsRaw = pickStr(row, "Free Rent Months", "free_rent_months");
-          const escalationPercent = toFloat(
-            row["Escalation Percent"] ?? row["escalation_percent"]
-          );
-          const isSublease = parseSublease(pickStr(row, "Sublease"));
+          const leaseType = normLeaseType(pickStr(row, "Lease Rent Type"));
+          const tiAllowance = toFloat(row["Tenant Improvements"]);
+          const freeRentMonthsRaw = pickStr(row, "Free Rent Months");
+          const escalationPercent = toFloat(row["Deal Point Escalations"]);
+          const isSublease = parseSublease(pickStr(row, "Sublease (Yes,No)", "Sublease"));
 
           let monthsRemaining: number | null = null;
           if (endDate) {
@@ -169,6 +181,7 @@ export async function POST(request: Request) {
               propertyAddress: address,
               propertyCity: city,
               propertyState: "CA",
+              propertyType: "office",
               suiteUnit: suite,
               floor,
               squareFeet: areaLeased,
@@ -190,45 +203,50 @@ export async function POST(request: Request) {
               listingAgency,
               notes,
               sourceFile: ctx.sourceFile,
-              confidence: "high",
+              confidence: "high", // curated dataset
             },
             { tenantId, buildingId, startDate }
           );
 
-          // Tenant decision-makers — Centerpoint only. LXD's "Name (Contact)" is a
-          // broker rollup, not decision-makers, so we don't fall back to it.
-          const people = splitMultiName(pickStr(row, "Tenant Contact"));
-          const emails = splitEmails(pickStr(row, "Email"));
-          const phones = parsePhones(pickStr(row, "Contact Information"));
-
-          people.forEach((person, i) => {
+          // Decision makers (DM1/DM2/DM3) — sparse but high signal when present.
+          for (const i of [1, 2, 3] as const) {
+            const name = dmStr(pickStr(row, `DM${i}_Name`));
+            if (!name) continue;
+            const title = dmStr(pickStr(row, `DM${i}_Title`));
+            const linkedin = dmStr(pickStr(row, `DM${i}_LinkedIn`));
+            const phone = dmStr(pickStr(row, `DM${i}_Phone`));
+            const email = dmEmail(pickStr(row, `DM${i}_Email`));
             upsertContact(
               {
-                name: person.name,
-                title: person.title ?? null,
-                email: emails[i] ?? null,
-                phone: phones.primary,
-                directPhone: phones.direct,
-                mobilePhone: phones.mobile,
+                name,
+                title,
+                email,
+                phone,
                 company: tenantName,
                 type: "other",
-                tags: ["tenant-contact"],
+                tags: ["tenant-contact", "decision-maker"],
+                notes: linkedin ? `LinkedIn: ${linkedin}` : null,
               },
               ctx
             );
-          });
+            stats.decisionMakersExtracted++;
+          }
 
+          // Tenant-side brokers (comma-separated).
           for (const agent of splitBrokers(tenantAgentRaw)) {
             upsertContact(
               { name: agent, company: tenantAgency, type: "broker", tags: ["tenant-broker"] },
               ctx
             );
+            stats.brokersExtracted++;
           }
+          // Landlord-side (listing) brokers.
           for (const agent of splitBrokers(listingAgentRaw)) {
             upsertContact(
               { name: agent, company: listingAgency, type: "broker", tags: ["listing-broker"] },
               ctx
             );
+            stats.brokersExtracted++;
           }
 
           stats.rowsProcessed++;
