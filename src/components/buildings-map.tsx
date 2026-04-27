@@ -323,7 +323,12 @@ export function BuildingsMap({ buildings }: { buildings: BuildingPin[] }) {
     // canvas has real dimensions before MapLibre measures it. The 64=16rem
     // left offset matches the sidebar width.
     <div className="fixed inset-0 left-64">
-      <div ref={mapContainer} className="absolute inset-0" />
+      {/*
+        MapLibre adds inline `position: relative` to its container, which
+        nullifies any `position: absolute; inset: 0` we'd put here. Use
+        explicit width/height so the size doesn't depend on positioning.
+      */}
+      <div ref={mapContainer} className="w-full h-full" />
 
       {buildings.length === 0 && (
         <div className="pointer-events-none absolute inset-x-0 top-4 z-10 flex justify-center">
