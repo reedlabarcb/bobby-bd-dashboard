@@ -134,6 +134,139 @@ export function normLeaseType(raw: string | null): string | null {
   return raw.trim();
 }
 
+// Brokerages that appear in Bob's per-city comp CSVs as either tenant- or
+// landlord-side representatives. Lowercased; substring match against entity
+// names. Order matters only for human readability — match logic is set-style.
+const KNOWN_BROKERAGES = [
+  "cbre",
+  "cushman & wakefield",
+  "cushman",
+  "colliers",
+  "jll",
+  "lee & associates",
+  "hughes marino",
+  "kidder mathews",
+  "voit real estate",
+  "voit",
+  "newmark",
+  "the havens group",
+  "cresa",
+  "svn",
+  "lincoln property",
+  "avison young",
+  "coldwell banker",
+  "marcus & millichap",
+  "berkadia",
+  "cbre global investors",
+];
+
+export function isBrokerage(name: string): boolean {
+  const norm = name.toLowerCase();
+  return KNOWN_BROKERAGES.some((b) => norm.includes(b));
+}
+
+// Parse the per-city comp `Name (Company)` field. Pipe-separated, 1-5 entities,
+// position partly meaningful but order varies. Returns best-guess role
+// assignment and the raw entity list for traceability.
+//
+//   "Tenant | Broker"                                 → 2 entities
+//   "Tenant | Broker | Landlord"                      → 3 entities
+//   "Tenant | T-broker | Landlord | L-broker"         → 4 entities (most common)
+//   "Tenant | <No Broker...> | Landlord-parent | Sub | L-broker" → 5 entities
+//
+// Rule: position 0 is always the tenant if it's not a brokerage. Brokerage-
+// looking entities are siphoned off as brokers (preserving t-broker/l-broker
+// distinction by position when possible). Whatever's left is the landlord.
+export type ParsedEntities = {
+  tenant: string | null;
+  tenantBroker: string | null;
+  landlord: string | null;
+  listingBroker: string | null;
+  raw: string[];
+};
+
+export function parseNameCompany(raw: string | null | undefined): ParsedEntities {
+  const empty: ParsedEntities = {
+    tenant: null,
+    tenantBroker: null,
+    landlord: null,
+    listingBroker: null,
+    raw: [],
+  };
+  if (!raw) return empty;
+
+  const parts = String(raw)
+    .split(/\s*\|\s*/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && !/^<no broker.*>$/i.test(s));
+
+  if (parts.length === 0) return empty;
+
+  // Single entity that's a brokerage = vacant listing, no tenant → skip.
+  if (parts.length === 1) {
+    return isBrokerage(parts[0])
+      ? { ...empty, raw: parts, listingBroker: parts[0] }
+      : { ...empty, raw: parts, tenant: parts[0] };
+  }
+
+  const isBroker = parts.map(isBrokerage);
+
+  // 2 entities: usually [tenant, broker]; if pos-2 isn't a brokerage, treat
+  // as [tenant, landlord].
+  if (parts.length === 2) {
+    if (isBroker[1]) return { ...empty, raw: parts, tenant: parts[0], listingBroker: parts[1] };
+    return { ...empty, raw: parts, tenant: parts[0], landlord: parts[1] };
+  }
+
+  // 3 entities: [tenant, broker, landlord] is the dominant shape.
+  if (parts.length === 3) {
+    return {
+      raw: parts,
+      tenant: parts[0],
+      tenantBroker: isBroker[1] ? parts[1] : null,
+      landlord: isBroker[1] ? parts[2] : parts[1],
+      listingBroker: isBroker[1] ? null : isBroker[2] ? parts[2] : null,
+    };
+  }
+
+  // 4+ entities: dominant shape is [tenant, t-broker, landlord, l-broker].
+  // Any remaining brokerages (5+ rows) are treated as additional listing
+  // brokers; non-brokerage entities in middle slots are treated as landlord
+  // companies (sometimes parent + sub).
+  const tenant = parts[0];
+  let tenantBroker: string | null = null;
+  let listingBroker: string | null = null;
+  const landlords: string[] = [];
+
+  // Walk positions 1..n-1, classify by brokerage match.
+  for (let i = 1; i < parts.length; i++) {
+    const p = parts[i];
+    if (isBroker[i]) {
+      if (!tenantBroker) tenantBroker = p;
+      else listingBroker = p; // last brokerage wins as listing broker
+    } else {
+      landlords.push(p);
+    }
+  }
+
+  return {
+    raw: parts,
+    tenant,
+    tenantBroker,
+    landlord: landlords.length > 0 ? landlords.join(" / ") : null,
+    listingBroker,
+  };
+}
+
+// Per-city CSV notes often carry "(Industry: X)" or "Industry: X" — pull it
+// out so it can populate tenants.industry.
+export function extractIndustry(notes: string | null): string | null {
+  if (!notes) return null;
+  const m = notes.match(/Industry:\s*([^).\n]+)/i);
+  if (!m) return null;
+  return m[1].trim() || null;
+}
+
 export function monthsBetween(from: Date, to: Date): number {
   return (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
 }
