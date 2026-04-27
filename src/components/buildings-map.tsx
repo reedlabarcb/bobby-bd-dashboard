@@ -318,7 +318,11 @@ export function BuildingsMap({ buildings }: { buildings: BuildingPin[] }) {
   }, [syncMarkers, syncHeatmap]);
 
   return (
-    <div className="relative -m-6" style={{ height: "calc(100vh - 0rem)" }}>
+    // `fixed inset-0 left-64` pins the map to the viewport directly,
+    // sidestepping any parent `height: 100vh` quirks and guaranteeing the
+    // canvas has real dimensions before MapLibre measures it. The 64=16rem
+    // left offset matches the sidebar width.
+    <div className="fixed inset-0 left-64">
       <div ref={mapContainer} className="absolute inset-0" />
 
       {buildings.length === 0 && (
