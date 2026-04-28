@@ -40,12 +40,28 @@ import {
 
 // ---- Types ----
 
+type TenantContact = {
+  id: number;
+  name: string;
+  title: string | null;
+  email: string | null;
+  phone: string | null;
+  type: string | null;
+};
+
+type LandlordContact = {
+  id: number;
+  name: string;
+};
+
 type LeaseRow = {
   id: number;
   tenantName: string;
   tenantIndustry: string | null;
   tenantCreditRating: string | null;
   tenantId: number;
+  buildingId: number | null;
+  landlordContactId: number | null;
   propertyName: string | null;
   propertyAddress: string | null;
   propertyCity: string | null;
@@ -65,6 +81,8 @@ type LeaseRow = {
   confidence: string | null;
   documentId: number | null;
   dealId: number | null;
+  tenantContacts: TenantContact[];
+  landlordContact: LandlordContact | null;
 };
 
 type SortField =
@@ -139,6 +157,24 @@ const CONFIDENCE_BADGE: Record<string, string> = {
 
 const LEASE_TYPE_BADGE = "bg-violet-500/20 text-violet-400 border-violet-500/30";
 
+function SortIcon({
+  field,
+  sortField,
+  sortDir,
+}: {
+  field: SortField;
+  sortField: SortField;
+  sortDir: SortDir;
+}) {
+  if (sortField !== field)
+    return <ArrowUpDown className="ml-1 size-3 text-muted-foreground/50" />;
+  return sortDir === "asc" ? (
+    <ArrowUp className="ml-1 size-3 text-emerald-400" />
+  ) : (
+    <ArrowDown className="ml-1 size-3 text-emerald-400" />
+  );
+}
+
 // ---- Component ----
 
 export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
@@ -192,7 +228,7 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
     const minS = minSF ? parseInt(minSF) : null;
     const maxS = maxSF ? parseInt(maxSF) : null;
 
-    let list = leases.filter((l) => {
+    const list = leases.filter((l) => {
       // Tab / time horizon — only future expirations (already-expired leases
       // live on the "All" tab). Months-remaining is negative when past.
       if (tab !== "all") {
@@ -341,16 +377,6 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
       setSortField(field);
       setSortDir("asc");
     }
-  }
-
-  function SortIcon({ field }: { field: SortField }) {
-    if (sortField !== field)
-      return <ArrowUpDown className="ml-1 size-3 text-muted-foreground/50" />;
-    return sortDir === "asc" ? (
-      <ArrowUp className="ml-1 size-3 text-emerald-400" />
-    ) : (
-      <ArrowDown className="ml-1 size-3 text-emerald-400" />
-    );
   }
 
   function toggleRow(id: number) {
@@ -659,7 +685,7 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
                       className="flex items-center font-medium"
                     >
                       Tenant
-                      <SortIcon field="tenantName" />
+                      <SortIcon field="tenantName" sortField={sortField} sortDir={sortDir} />
                     </button>
                   </TableHead>
                   <TableHead>
@@ -668,7 +694,7 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
                       className="flex items-center font-medium"
                     >
                       Property
-                      <SortIcon field="propertyName" />
+                      <SortIcon field="propertyName" sortField={sortField} sortDir={sortDir} />
                     </button>
                   </TableHead>
                   <TableHead>
@@ -677,7 +703,7 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
                       className="flex items-center font-medium"
                     >
                       Location
-                      <SortIcon field="propertyCity" />
+                      <SortIcon field="propertyCity" sortField={sortField} sortDir={sortDir} />
                     </button>
                   </TableHead>
                   <TableHead>Suite/Unit</TableHead>
@@ -687,7 +713,7 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
                       className="flex items-center justify-end font-medium ml-auto"
                     >
                       SF
-                      <SortIcon field="squareFeet" />
+                      <SortIcon field="squareFeet" sortField={sortField} sortDir={sortDir} />
                     </button>
                   </TableHead>
                   <TableHead>
@@ -696,7 +722,7 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
                       className="flex items-center font-medium"
                     >
                       Lease End
-                      <SortIcon field="leaseEndDate" />
+                      <SortIcon field="leaseEndDate" sortField={sortField} sortDir={sortDir} />
                     </button>
                   </TableHead>
                   <TableHead>
@@ -705,7 +731,7 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
                       className="flex items-center font-medium"
                     >
                       Mo. Left
-                      <SortIcon field="monthsRemaining" />
+                      <SortIcon field="monthsRemaining" sortField={sortField} sortDir={sortDir} />
                     </button>
                   </TableHead>
                   <TableHead className="text-right">
@@ -714,7 +740,7 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
                       className="flex items-center justify-end font-medium ml-auto"
                     >
                       Rent PSF
-                      <SortIcon field="rentPsf" />
+                      <SortIcon field="rentPsf" sortField={sortField} sortDir={sortDir} />
                     </button>
                   </TableHead>
                   <TableHead className="text-right">
@@ -723,7 +749,7 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
                       className="flex items-center justify-end font-medium ml-auto"
                     >
                       Annual Rent
-                      <SortIcon field="annualRent" />
+                      <SortIcon field="annualRent" sortField={sortField} sortDir={sortDir} />
                     </button>
                   </TableHead>
                   <TableHead>
@@ -732,7 +758,7 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
                       className="flex items-center font-medium"
                     >
                       Type
-                      <SortIcon field="leaseType" />
+                      <SortIcon field="leaseType" sortField={sortField} sortDir={sortDir} />
                     </button>
                   </TableHead>
                   <TableHead>
@@ -741,7 +767,7 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
                       className="flex items-center font-medium"
                     >
                       Conf.
-                      <SortIcon field="confidence" />
+                      <SortIcon field="confidence" sortField={sortField} sortDir={sortDir} />
                     </button>
                   </TableHead>
                 </TableRow>
@@ -812,10 +838,28 @@ function LeaseRowGroup({
           )}
         </TableCell>
         <TableCell className="font-semibold text-foreground">
-          {l.tenantName}
+          <a
+            href={`/contacts?view=company&search=${encodeURIComponent(l.tenantName)}`}
+            onClick={(e) => e.stopPropagation()}
+            className="hover:text-blue-400 hover:underline transition-colors"
+            title={`See contacts at ${l.tenantName}`}
+          >
+            {l.tenantName}
+          </a>
         </TableCell>
         <TableCell className="text-muted-foreground">
-          {l.propertyName || "---"}
+          {l.buildingId ? (
+            <a
+              href={`/buildings?id=${l.buildingId}`}
+              onClick={(e) => e.stopPropagation()}
+              className="hover:text-blue-400 hover:underline transition-colors"
+              title="Open building"
+            >
+              {l.propertyName || l.propertyAddress || "---"}
+            </a>
+          ) : (
+            l.propertyName || "---"
+          )}
         </TableCell>
         <TableCell className="text-muted-foreground">
           {l.propertyCity && l.propertyState
@@ -897,28 +941,90 @@ function LeaseRowGroup({
                 </div>
               </div>
 
-              {/* Options & Escalations */}
+              {/* Contacts */}
               <div className="space-y-2">
                 <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
-                  Options & Escalations
+                  Contacts
                 </h4>
-                <div className="space-y-1">
+                <div className="space-y-2">
+                  {/* Tenant-side people */}
                   <div>
-                    <span className="text-muted-foreground text-xs">
-                      Options:
-                    </span>
-                    <p className="text-xs mt-0.5">
-                      {l.options || "None specified"}
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-1">
+                      At {l.tenantName}
                     </p>
+                    {l.tenantContacts.length === 0 ? (
+                      <a
+                        href={`/contacts?view=company&search=${encodeURIComponent(l.tenantName)}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-xs text-blue-400 hover:text-blue-300"
+                      >
+                        + Add a contact at this tenant →
+                      </a>
+                    ) : (
+                      <div className="space-y-1">
+                        {l.tenantContacts.slice(0, 4).map((c) => (
+                          <a
+                            key={c.id}
+                            href={`/contacts/${c.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="block text-xs hover:bg-muted/40 rounded px-1.5 py-1 -mx-1.5 transition-colors"
+                          >
+                            <span className="font-medium text-foreground">{c.name}</span>
+                            {c.title && (
+                              <span className="text-muted-foreground"> · {c.title}</span>
+                            )}
+                            {(c.email || c.phone) && (
+                              <span className="text-muted-foreground/70 ml-1">
+                                {c.email ? `· ${c.email}` : `· ${c.phone}`}
+                              </span>
+                            )}
+                          </a>
+                        ))}
+                        {l.tenantContacts.length > 4 && (
+                          <a
+                            href={`/contacts?view=company&search=${encodeURIComponent(l.tenantName)}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-xs text-blue-400 hover:text-blue-300"
+                          >
+                            + {l.tenantContacts.length - 4} more →
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <span className="text-muted-foreground text-xs">
-                      Escalations:
-                    </span>
-                    <p className="text-xs mt-0.5">
-                      {l.escalations || "None specified"}
-                    </p>
-                  </div>
+                  {/* Landlord */}
+                  {l.landlordContact && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 mb-1">
+                        Landlord
+                      </p>
+                      <a
+                        href={`/contacts/${l.landlordContact.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="block text-xs hover:bg-muted/40 rounded px-1.5 py-1 -mx-1.5 transition-colors"
+                      >
+                        <span className="font-medium text-foreground">
+                          {l.landlordContact.name}
+                        </span>
+                      </a>
+                    </div>
+                  )}
+                  {/* Options/Escalations as a small footnote — surfaced from
+                      the source doc, useful but not the primary thing here */}
+                  {(l.options || l.escalations) && (
+                    <div className="pt-1 border-t border-border/40">
+                      {l.options && (
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          <span className="font-medium">Options:</span> {l.options}
+                        </p>
+                      )}
+                      {l.escalations && (
+                        <p className="text-[10px] text-muted-foreground mt-1">
+                          <span className="font-medium">Escalations:</span> {l.escalations}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

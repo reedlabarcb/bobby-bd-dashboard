@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -87,8 +87,26 @@ function buildGroups(contacts: Contact[]): CompanyGroup[] {
 
 export function ContactsByCompany({ contacts }: { contacts: Contact[] }) {
   const router = useRouter();
-  const [search, setSearch] = useState("");
+  const params = useSearchParams();
+  const initialSearch = params.get("search") ?? "";
+  const [search, setSearch] = useState(initialSearch);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // If we deep-linked with ?search=<tenant>, auto-expand any company that
+  // matches the search term so the user lands on an open list.
+  useEffect(() => {
+    if (!initialSearch) return;
+    const q = initialSearch.toLowerCase();
+    const matching = contacts
+      .map((c) => (c.type === "landlord" ? c.name : c.company))
+      .filter((s): s is string => typeof s === "string" && s.toLowerCase().includes(q))
+      .map((s) => s.toLowerCase().trim());
+    if (matching.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setExpanded(new Set(matching));
+    }
+  }, [initialSearch, contacts]);
+
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [addForm, setAddForm] = useState({ name: "", title: "", email: "", phone: "" });
   const [saving, setSaving] = useState(false);
