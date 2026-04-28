@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import {
   Search,
@@ -162,6 +163,39 @@ export function BuildingsTable({
   const [sortField, setSortField] = useState<SortField>("soonestExpiry");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
+
+  // Deep-link support: ?id=<buildingId> → auto-expand + scroll into view.
+  // Used by the /map popup's "Open in Buildings" link.
+  const searchParams = useSearchParams();
+  const deepLinkId = searchParams.get("id");
+  useEffect(() => {
+    if (!deepLinkId) return;
+    const id = parseInt(deepLinkId, 10);
+    if (!Number.isFinite(id)) return;
+    // Clear filters so the deep-linked row isn't filtered out, and expand it.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setSearch("");
+    setCityFilter("all");
+    setClassFilter("all");
+    setExpandedRows((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // Scroll on next paint so the row exists in the DOM.
+    const t = setTimeout(() => {
+      const el = rowRefs.current.get(id);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring-2", "ring-blue-500/40");
+        setTimeout(() => el.classList.remove("ring-2", "ring-blue-500/40"), 2500);
+      }
+    }, 50);
+    return () => clearTimeout(t);
+  }, [deepLinkId]);
 
   // Group leases by buildingId once.
   const leasesByBuilding = useMemo(() => {
@@ -482,6 +516,10 @@ export function BuildingsTable({
                   building={b}
                   isExpanded={expandedRows.has(b.id)}
                   onToggle={() => toggleRow(b.id)}
+                  rowRef={(el) => {
+                    if (el) rowRefs.current.set(b.id, el);
+                    else rowRefs.current.delete(b.id);
+                  }}
                 />
               ))
             )}
@@ -496,10 +534,12 @@ function BuildingRowGroup({
   building: b,
   isExpanded,
   onToggle,
+  rowRef,
 }: {
   building: EnrichedBuilding;
   isExpanded: boolean;
   onToggle: () => void;
+  rowRef?: (el: HTMLTableRowElement | null) => void;
 }) {
   const color = urgencyColor(b.soonestMonths);
   const landlord = b.landlordContactName || b.landlordName;
@@ -507,6 +547,7 @@ function BuildingRowGroup({
   return (
     <>
       <TableRow
+        ref={rowRef}
         onClick={onToggle}
         className="cursor-pointer transition-colors hover:bg-muted/50"
       >

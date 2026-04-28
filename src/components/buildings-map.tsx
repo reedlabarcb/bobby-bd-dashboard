@@ -26,7 +26,19 @@ const DARK_STYLE: StyleSpecification = {
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
     },
   },
-  layers: [{ id: "carto-dark", type: "raster", source: "carto-dark" }],
+  layers: [
+    {
+      id: "carto-dark",
+      type: "raster",
+      source: "carto-dark",
+      paint: {
+        // Lift the floor a bit so deep blacks render as dark gray.
+        // Keeps the dark theme but stops it from looking like a void.
+        "raster-brightness-min": 0.18,
+        "raster-saturation": 0.1,
+      },
+    },
+  ],
 };
 
 // Same urgency palette used on /leases and /buildings tables.
@@ -220,7 +232,7 @@ export function BuildingsMap({ buildings }: { buildings: BuildingPin[] }) {
             </div>
             ${tenantRows}
             ${moreLabel}
-            <a href="/buildings" style="display:inline-block; margin-top:8px; font-size:11px; color:#3B82F6; text-decoration:none; font-weight:500;">Open in Buildings &rarr;</a>
+            <a href="/buildings?id=${b.id}" style="display:inline-block; margin-top:8px; font-size:11px; color:#3B82F6; text-decoration:none; font-weight:500;">Open in Buildings &rarr;</a>
           </div>`;
 
         const popup = new maplibregl.Popup({ offset: 12, closeButton: true, maxWidth: "320px" })
