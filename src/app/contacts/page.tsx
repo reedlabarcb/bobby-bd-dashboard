@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { contacts } from "@/lib/db/schema";
+import { contacts, tenants, buildings } from "@/lib/db/schema";
 import { desc } from "drizzle-orm";
 import { Building2, List } from "lucide-react";
 import { ContactsTable } from "@/components/contacts-table";
@@ -23,6 +23,31 @@ export default async function ContactsPage({
     .from(contacts)
     .orderBy(desc(contacts.createdAt))
     .all();
+
+  // Surface companies referenced elsewhere so they appear as groups even
+  // when no people are tracked there yet — that way Bobby can click a
+  // tenant on /leases and land on a "+ Add Person" prompt for that
+  // company instead of an empty page.
+  const tenantNames = db
+    .select({ name: tenants.name, industry: tenants.industry })
+    .from(tenants)
+    .all();
+  const buildingLandlords = db
+    .select({ name: buildings.landlordName })
+    .from(buildings)
+    .all();
+
+  const seedCompanies: { name: string; industry?: string | null; source: "tenant" | "landlord" }[] = [];
+  for (const t of tenantNames) {
+    if (t.name && t.name.trim()) {
+      seedCompanies.push({ name: t.name.trim(), industry: t.industry, source: "tenant" });
+    }
+  }
+  for (const b of buildingLandlords) {
+    if (b.name && b.name.trim()) {
+      seedCompanies.push({ name: b.name.trim(), source: "landlord" });
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -62,7 +87,7 @@ export default async function ContactsPage({
       {isFlat ? (
         <ContactsTable contacts={allContacts} autoOpenAdd={sp.add === "true"} />
       ) : (
-        <ContactsByCompany contacts={allContacts} />
+        <ContactsByCompany contacts={allContacts} seedCompanies={seedCompanies} />
       )}
     </div>
   );

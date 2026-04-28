@@ -42,7 +42,16 @@ type CompanyGroup = {
   people: Contact[];       // non-landlord contacts at this company
 };
 
-function buildGroups(contacts: Contact[]): CompanyGroup[] {
+export type SeedCompany = {
+  name: string;
+  industry?: string | null;
+  source: "tenant" | "landlord";
+};
+
+function buildGroups(
+  contacts: Contact[],
+  seeds: SeedCompany[] = []
+): CompanyGroup[] {
   const map = new Map<string, CompanyGroup>();
   function ensure(key: string, display: string): CompanyGroup {
     let g = map.get(key);
@@ -51,6 +60,15 @@ function buildGroups(contacts: Contact[]): CompanyGroup[] {
       map.set(key, g);
     }
     return g;
+  }
+
+  // Seed empty groups for every company referenced from the leases / buildings
+  // side, so a company can appear in the list even when no contacts exist yet.
+  // These are placeholder groups that get populated below if any contact does
+  // reference the same company.
+  for (const s of seeds) {
+    if (!s.name || !s.name.trim()) continue;
+    ensure(s.name.trim().toLowerCase(), s.name.trim());
   }
 
   for (const c of contacts) {
@@ -85,7 +103,13 @@ function buildGroups(contacts: Contact[]): CompanyGroup[] {
   });
 }
 
-export function ContactsByCompany({ contacts }: { contacts: Contact[] }) {
+export function ContactsByCompany({
+  contacts,
+  seedCompanies = [],
+}: {
+  contacts: Contact[];
+  seedCompanies?: SeedCompany[];
+}) {
   const router = useRouter();
   const params = useSearchParams();
   const initialSearch = params.get("search") ?? "";
@@ -94,24 +118,28 @@ export function ContactsByCompany({ contacts }: { contacts: Contact[] }) {
 
   // If we deep-linked with ?search=<tenant>, auto-expand any company that
   // matches the search term so the user lands on an open list.
-  useEffect(() => {
-    if (!initialSearch) return;
-    const q = initialSearch.toLowerCase();
-    const matching = contacts
-      .map((c) => (c.type === "landlord" ? c.name : c.company))
-      .filter((s): s is string => typeof s === "string" && s.toLowerCase().includes(q))
-      .map((s) => s.toLowerCase().trim());
-    if (matching.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setExpanded(new Set(matching));
-    }
-  }, [initialSearch, contacts]);
+  // Defer using groups until they're built — see effect below.
 
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [addForm, setAddForm] = useState({ name: "", title: "", email: "", phone: "" });
   const [saving, setSaving] = useState(false);
 
-  const groups = useMemo(() => buildGroups(contacts), [contacts]);
+  const groups = useMemo(
+    () => buildGroups(contacts, seedCompanies),
+    [contacts, seedCompanies]
+  );
+
+  useEffect(() => {
+    if (!initialSearch) return;
+    const q = initialSearch.toLowerCase();
+    const matching = groups
+      .filter((g) => g.display.toLowerCase().includes(q))
+      .map((g) => g.key);
+    if (matching.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setExpanded(new Set(matching));
+    }
+  }, [initialSearch, groups]);
 
   const filteredGroups = useMemo(() => {
     if (!search.trim()) return groups;
