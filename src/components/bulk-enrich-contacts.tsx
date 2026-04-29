@@ -215,16 +215,17 @@ export function BulkEnrichContacts({ contacts }: { contacts: Contact[] }) {
                     </span>
                   ) : (result.errors?.length ?? 0) > 0 ? (
                     <span
-                      className="flex items-center gap-1.5 text-amber-400 justify-end"
+                      className="flex items-start gap-1.5 text-amber-400 justify-end"
                       title={result.errors?.join("\n")}
                     >
-                      <AlertCircle className="h-3 w-3" />
-                      {result.errors![0].split(":")[0]} failed
+                      <AlertCircle className="h-3 w-3 mt-0.5" />
+                      <span className="text-right text-[10px] leading-tight max-w-[260px] truncate">
+                        {result.errors![0]}
+                        {result.errors!.length > 1 ? ` (+${result.errors!.length - 1})` : ""}
+                      </span>
                     </span>
                   ) : (
-                    <span className="text-muted-foreground" title={`enrichmentCount=${result.enrichmentCount}`}>
-                      no new data ({result.enrichmentCount}/3 sources hit)
-                    </span>
+                    <span className="text-muted-foreground">no providers responded</span>
                   )
                 ) : result?.state === "error" ? (
                   <span className="flex items-center gap-1.5 text-red-500 justify-end" title={result.error}>

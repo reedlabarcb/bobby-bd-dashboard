@@ -96,12 +96,16 @@ export async function POST(request: Request) {
           };
           saveEnrichment(contactId, "hunter-domain", hunterDomainHit);
           enrichmentResults.push({ source: "hunter-domain", data: hunterDomainHit });
+        } else if (ds.emails.length === 0) {
+          // No coverage for this company at all. Surface it so the UI shows it.
+          errors.push(
+            `Hunter: no emails crawled for ${ds.organization || contact.company}${ds.domain ? ` (${ds.domain})` : ""}`,
+          );
         } else {
-          // Still record what we tried — useful for debugging.
-          enrichmentResults.push({
-            source: "hunter-domain",
-            data: { totalEmailsScanned: ds.emails.length, organization: ds.organization, matched: false },
-          });
+          // Hunter has the company but couldn't match the name.
+          errors.push(
+            `Hunter: ${ds.emails.length} emails at ${ds.organization || contact.company} but no match for "${contact.name}"`,
+          );
         }
       } catch (e) {
         errors.push(`Hunter domain-search: ${e instanceof Error ? e.message : "failed"}`);
