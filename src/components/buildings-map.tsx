@@ -32,9 +32,11 @@ const DARK_STYLE: StyleSpecification = {
       type: "raster",
       source: "carto-dark",
       paint: {
-        // Lift the floor a bit so deep blacks render as dark gray.
-        // Keeps the dark theme but stops it from looking like a void.
-        "raster-brightness-min": 0.18,
+        // Lift the floor so deep blacks render as mid-gray.
+        // Keeps the dark theme but readable, not a void.
+        "raster-brightness-min": 0.35,
+        "raster-brightness-max": 1,
+        "raster-contrast": -0.1,
         "raster-saturation": 0.1,
       },
     },
