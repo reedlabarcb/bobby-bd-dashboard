@@ -12,6 +12,7 @@ import {
   FolderSearch,
   CalendarClock,
   LogOut,
+  Sparkles,
 } from "lucide-react";
 
 const nav = [
@@ -23,6 +24,7 @@ const nav = [
   { href: "/leases", label: "Expiring Leases", icon: CalendarClock },
   { href: "/activities", label: "Activities", icon: Activity },
   { href: "/map", label: "Map", icon: Map },
+  { href: "/enrich", label: "Bulk Enrich", icon: Sparkles },
 ];
 
 export function Sidebar() {
