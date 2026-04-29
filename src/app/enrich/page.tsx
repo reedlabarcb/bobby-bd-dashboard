@@ -4,6 +4,7 @@ import { ne, sql } from "drizzle-orm";
 import { BulkEnrichTenants } from "@/components/bulk-enrich-tenants";
 import { BulkEnrichContacts } from "@/components/bulk-enrich-contacts";
 import { DiagnosticsCard } from "@/components/diagnostics-card";
+import { ProbeCompanyCard } from "@/components/probe-company-card";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +70,8 @@ export default async function EnrichPage() {
       </div>
 
       <DiagnosticsCard />
+
+      <ProbeCompanyCard />
 
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="rounded-lg border border-border bg-card p-4">

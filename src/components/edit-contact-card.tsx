@@ -448,7 +448,7 @@ export function EditContactCard({ contact }: { contact: ContactRecord }) {
             <Separator />
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-1">Notes</p>
-              <p className="text-sm whitespace-pre-wrap">{contact.notes}</p>
+              <NotesWithLinks text={contact.notes} />
             </div>
           </>
         )}
@@ -474,5 +474,37 @@ function Row({ icon, children }: { icon: React.ReactNode; children: React.ReactN
       <span className="text-muted-foreground shrink-0">{icon}</span>
       {children}
     </div>
+  );
+}
+
+// Render notes with URLs (esp. LinkedIn) as clickable links. Splits the text
+// on URLs and rebuilds with anchor tags. Anchors open in a new tab.
+const URL_RE = /(https?:\/\/[^\s)<>"]+)/g;
+function NotesWithLinks({ text }: { text: string }) {
+  const parts = text.split(URL_RE);
+  return (
+    <p className="text-sm whitespace-pre-wrap break-words">
+      {parts.map((part, i) => {
+        if (URL_RE.test(part)) {
+          // Reset regex state since /g sticky stuff
+          URL_RE.lastIndex = 0;
+          const isLinkedIn = /linkedin\.com/i.test(part);
+          return (
+            <a
+              key={i}
+              href={part}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`underline ${
+                isLinkedIn ? "text-[#0A66C2] hover:text-[#0A66C2]/80" : "text-blue-400 hover:text-blue-300"
+              }`}
+            >
+              {isLinkedIn ? "LinkedIn profile" : part}
+            </a>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </p>
   );
 }
