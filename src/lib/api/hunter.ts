@@ -27,7 +27,7 @@ export async function findEmail(
     api_key: getKey(),
   });
   if (lookup.domain) params.set("domain", lookup.domain);
-  else if (lookup.company) params.set("company", lookup.company);
+  else if (lookup.company) params.set("company", cleanCompany(lookup.company));
   else throw new Error("findEmail requires domain or company");
 
   const res = await fetch(`${HUNTER_BASE}/email-finder?${params}`);
@@ -54,6 +54,16 @@ export type HunterDomainEmail = {
   phone_number: string | null;
 };
 
+// Hunter's company resolution dislikes punctuation. "Kisco, Senior Living"
+// resolves to nothing; "Kisco Senior Living" resolves correctly. Strip
+// commas / parens / extra whitespace before sending.
+function cleanCompany(name: string): string {
+  return name
+    .replace(/[,()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // Hunter's domain-search returns every known email at a company (up to 100).
 // This is much richer than Apollo's people-search on free tiers — Hunter
 // actually surfaces verified emails + titles + linkedin URLs directly.
@@ -63,7 +73,7 @@ export async function domainSearch(
 ): Promise<{ domain: string | null; organization: string | null; emails: HunterDomainEmail[] }> {
   const params = new URLSearchParams({ api_key: getKey() });
   if (lookup.domain) params.set("domain", lookup.domain);
-  else if (lookup.company) params.set("company", lookup.company);
+  else if (lookup.company) params.set("company", cleanCompany(lookup.company));
   else throw new Error("domainSearch requires domain or company");
   params.set("limit", String(options.limit ?? 25));
   if (options.onlyPersonal) params.set("type", "personal");
