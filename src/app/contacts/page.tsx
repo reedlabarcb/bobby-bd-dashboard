@@ -2,10 +2,10 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { contacts, tenants, buildings } from "@/lib/db/schema";
-import { desc } from "drizzle-orm";
+import { contacts, tenants, buildings, leases } from "@/lib/db/schema";
+import { desc, eq } from "drizzle-orm";
 import { Building2, List } from "lucide-react";
-import { ContactsTable } from "@/components/contacts-table";
+import { ContactsTable, type ContactWithLease } from "@/components/contacts-table";
 import { ContactsByCompany } from "@/components/contacts-by-company";
 import { Button } from "@/components/ui/button";
 
@@ -15,7 +15,9 @@ export default async function ContactsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const sp = await searchParams;
-  const view = (Array.isArray(sp.view) ? sp.view[0] : sp.view) || "company";
+  // Default view is now flat/people-first. Tenant rollups already live on
+  // /buildings and /leases; the contacts page should be about the people.
+  const view = (Array.isArray(sp.view) ? sp.view[0] : sp.view) || "flat";
   const isFlat = view === "flat";
 
   const allContacts = db
@@ -23,6 +25,54 @@ export default async function ContactsPage({
     .from(contacts)
     .orderBy(desc(contacts.createdAt))
     .all();
+
+  // Pull every lease joined to its tenant so we can pin the soonest-expiring
+  // lease onto each contact via company-name match.
+  const allLeases = db
+    .select({
+      tenantName: tenants.name,
+      leaseEndDate: leases.leaseEndDate,
+      squareFeet: leases.squareFeet,
+      monthsRemaining: leases.monthsRemaining,
+      propertyName: leases.propertyName,
+      propertyAddress: leases.propertyAddress,
+    })
+    .from(leases)
+    .innerJoin(tenants, eq(leases.tenantId, tenants.id))
+    .all();
+
+  type LeaseHit = (typeof allLeases)[number];
+  const leaseByCompany = new Map<string, LeaseHit>();
+  for (const l of allLeases) {
+    if (!l.tenantName) continue;
+    const key = l.tenantName.toLowerCase().trim();
+    const existing = leaseByCompany.get(key);
+    if (!existing) {
+      leaseByCompany.set(key, l);
+      continue;
+    }
+    // Prefer soonest *future* expiration (months >= 0); fall back to most
+    // recent past expiration so we still surface something.
+    const a = l.monthsRemaining ?? 9999;
+    const b = existing.monthsRemaining ?? 9999;
+    const aFuture = a >= 0;
+    const bFuture = b >= 0;
+    if (aFuture && !bFuture) leaseByCompany.set(key, l);
+    else if (aFuture === bFuture && a < b) leaseByCompany.set(key, l);
+  }
+
+  const enrichedContacts: ContactWithLease[] = allContacts.map((c) => {
+    const key = c.company?.toLowerCase().trim();
+    const lease = key ? leaseByCompany.get(key) : undefined;
+    return {
+      ...c,
+      leaseEndDate: lease?.leaseEndDate ?? null,
+      squareFeet: lease?.squareFeet ?? null,
+      monthsRemaining: lease?.monthsRemaining ?? null,
+      propertyName: lease?.propertyName ?? null,
+      propertyAddress: lease?.propertyAddress ?? null,
+    };
+  });
 
   // Surface companies referenced elsewhere so they appear as groups even
   // when no people are tracked there yet — that way Bobby can click a
@@ -53,14 +103,23 @@ export default async function ContactsPage({
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Company / Name</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Contacts</h1>
           <p className="text-sm text-muted-foreground">
-            Companies grouped with their personal contacts. Click a company to expand,
-            add people inline, or click a person to edit.
+            Every person — with their company, lease expiration, and square feet pulled in.
           </p>
         </div>
         {/* View toggle */}
         <div className="flex items-center gap-1 rounded-md border border-border bg-card p-1">
+          <Link href="/contacts?view=flat">
+            <Button
+              variant={isFlat ? "default" : "ghost"}
+              size="sm"
+              className="gap-1.5"
+            >
+              <List className="size-3.5" />
+              People
+            </Button>
+          </Link>
           <Link href="/contacts?view=company">
             <Button
               variant={isFlat ? "ghost" : "default"}
@@ -71,21 +130,11 @@ export default async function ContactsPage({
               By Company
             </Button>
           </Link>
-          <Link href="/contacts?view=flat">
-            <Button
-              variant={isFlat ? "default" : "ghost"}
-              size="sm"
-              className="gap-1.5"
-            >
-              <List className="size-3.5" />
-              Flat List
-            </Button>
-          </Link>
         </div>
       </div>
 
       {isFlat ? (
-        <ContactsTable contacts={allContacts} autoOpenAdd={sp.add === "true"} />
+        <ContactsTable contacts={enrichedContacts} autoOpenAdd={sp.add === "true"} />
       ) : (
         <ContactsByCompany contacts={allContacts} seedCompanies={seedCompanies} />
       )}

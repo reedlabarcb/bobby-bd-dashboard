@@ -46,7 +46,15 @@ import { Textarea } from "@/components/ui/textarea";
 
 import type { Contact } from "@/lib/db/schema";
 
-type SortField = "name" | "company" | "type" | "city" | "createdAt";
+export type ContactWithLease = Contact & {
+  leaseEndDate: string | null;
+  squareFeet: number | null;
+  monthsRemaining: number | null;
+  propertyName: string | null;
+  propertyAddress: string | null;
+};
+
+type SortField = "name" | "company" | "title" | "type" | "monthsRemaining" | "squareFeet";
 type SortDir = "asc" | "desc";
 
 const TYPE_COLORS: Record<string, string> = {
@@ -74,7 +82,7 @@ export function ContactsTable({
   contacts,
   autoOpenAdd,
 }: {
-  contacts: Contact[];
+  contacts: ContactWithLease[];
   autoOpenAdd?: boolean;
 }) {
   const router = useRouter();
@@ -82,8 +90,9 @@ export function ContactsTable({
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [cityFilter, setCityFilter] = useState<string>("all");
   const [stateFilter, setStateFilter] = useState<string>("all");
-  const [sortField, setSortField] = useState<SortField>("createdAt");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  // Default sort: most-urgent lease expirations first.
+  const [sortField, setSortField] = useState<SortField>("monthsRemaining");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [addOpen, setAddOpen] = useState(autoOpenAdd ?? false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -120,15 +129,21 @@ export function ContactsTable({
     });
 
     list.sort((a, b) => {
-      let aVal = "";
-      let bVal = "";
-      if (sortField === "createdAt") {
-        aVal = a.createdAt || "";
-        bVal = b.createdAt || "";
-      } else {
-        aVal = ((a as Record<string, unknown>)[sortField] as string) || "";
-        bVal = ((b as Record<string, unknown>)[sortField] as string) || "";
+      // Numeric fields: sort by value, with nulls at the end regardless of direction.
+      if (sortField === "monthsRemaining" || sortField === "squareFeet") {
+        const aRaw = a[sortField];
+        const bRaw = b[sortField];
+        const aHas = aRaw !== null && aRaw !== undefined;
+        const bHas = bRaw !== null && bRaw !== undefined;
+        if (!aHas && !bHas) return 0;
+        if (!aHas) return 1;
+        if (!bHas) return -1;
+        const cmp = (aRaw as number) - (bRaw as number);
+        return sortDir === "asc" ? cmp : -cmp;
       }
+
+      const aVal = ((a as Record<string, unknown>)[sortField] as string) || "";
+      const bVal = ((b as Record<string, unknown>)[sortField] as string) || "";
       const cmp = aVal.localeCompare(bVal);
       return sortDir === "asc" ? cmp : -cmp;
     });
@@ -207,6 +222,49 @@ export function ContactsTable({
     } catch {
       return d;
     }
+  }
+
+  function LeaseExpiryCell({
+    endDate,
+    monthsRemaining,
+    property,
+  }: {
+    endDate: string | null;
+    monthsRemaining: number | null;
+    property: string | null;
+  }) {
+    if (!endDate && monthsRemaining === null) {
+      return <span className="text-muted-foreground">-</span>;
+    }
+    // Urgency colors mirror /leases tab styling.
+    let badge = "bg-zinc-500/15 text-zinc-300 border-zinc-500/30";
+    if (monthsRemaining !== null) {
+      if (monthsRemaining < 0) badge = "bg-zinc-500/10 text-zinc-400 border-zinc-500/20";
+      else if (monthsRemaining <= 6) badge = "bg-red-500/15 text-red-300 border-red-500/30";
+      else if (monthsRemaining <= 12) badge = "bg-amber-500/15 text-amber-300 border-amber-500/30";
+      else if (monthsRemaining <= 24) badge = "bg-blue-500/15 text-blue-300 border-blue-500/30";
+    }
+    const monthLabel =
+      monthsRemaining === null
+        ? null
+        : monthsRemaining < 0
+        ? `expired ${Math.abs(monthsRemaining)}mo ago`
+        : `${monthsRemaining}mo`;
+    return (
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-center gap-1.5">
+          <span>{formatDate(endDate)}</span>
+          {monthLabel ? (
+            <span className={`inline-block rounded border px-1.5 py-0 text-[10px] font-medium ${badge}`}>
+              {monthLabel}
+            </span>
+          ) : null}
+        </div>
+        {property ? (
+          <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">{property}</span>
+        ) : null}
+      </div>
+    );
   }
 
   return (
@@ -438,49 +496,35 @@ export function ContactsTable({
           <TableHeader>
             <TableRow className="bg-muted/30 hover:bg-muted/30">
               <TableHead>
-                <button
-                  onClick={() => toggleSort("name")}
-                  className="flex items-center font-medium"
-                >
-                  Name
-                  <SortIcon field="name" />
+                <button onClick={() => toggleSort("name")} className="flex items-center font-medium">
+                  Name <SortIcon field="name" />
+                </button>
+              </TableHead>
+              <TableHead>
+                <button onClick={() => toggleSort("title")} className="flex items-center font-medium">
+                  Title <SortIcon field="title" />
+                </button>
+              </TableHead>
+              <TableHead>
+                <button onClick={() => toggleSort("company")} className="flex items-center font-medium">
+                  Company <SortIcon field="company" />
                 </button>
               </TableHead>
               <TableHead>Email</TableHead>
+              <TableHead>Phone</TableHead>
               <TableHead>
-                <button
-                  onClick={() => toggleSort("company")}
-                  className="flex items-center font-medium"
-                >
-                  Company
-                  <SortIcon field="company" />
+                <button onClick={() => toggleSort("monthsRemaining")} className="flex items-center font-medium">
+                  Lease Expires <SortIcon field="monthsRemaining" />
+                </button>
+              </TableHead>
+              <TableHead className="text-right">
+                <button onClick={() => toggleSort("squareFeet")} className="flex items-center font-medium ml-auto">
+                  SqFt <SortIcon field="squareFeet" />
                 </button>
               </TableHead>
               <TableHead>
-                <button
-                  onClick={() => toggleSort("type")}
-                  className="flex items-center font-medium"
-                >
-                  Type
-                  <SortIcon field="type" />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  onClick={() => toggleSort("city")}
-                  className="flex items-center font-medium"
-                >
-                  Location
-                  <SortIcon field="city" />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  onClick={() => toggleSort("createdAt")}
-                  className="flex items-center font-medium"
-                >
-                  Created
-                  <SortIcon field="createdAt" />
+                <button onClick={() => toggleSort("type")} className="flex items-center font-medium">
+                  Type <SortIcon field="type" />
                 </button>
               </TableHead>
               <TableHead className="w-10" />
@@ -489,10 +533,7 @@ export function ContactsTable({
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell
-                  colSpan={7}
-                  className="text-center text-muted-foreground py-12"
-                >
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
                   No contacts found
                 </TableCell>
               </TableRow>
@@ -504,24 +545,30 @@ export function ContactsTable({
                   onClick={() => router.push(`/contacts/${c.id}`)}
                 >
                   <TableCell className="font-medium">{c.name}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {c.email || "-"}
+                  <TableCell className="text-muted-foreground text-xs">
+                    {c.title || "-"}
                   </TableCell>
                   <TableCell>{c.company || "-"}</TableCell>
+                  <TableCell className="text-muted-foreground text-xs">
+                    {c.email || "-"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-xs">
+                    {c.phone || c.mobilePhone || c.directPhone || "-"}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    <LeaseExpiryCell
+                      endDate={c.leaseEndDate}
+                      monthsRemaining={c.monthsRemaining}
+                      property={c.propertyName || c.propertyAddress}
+                    />
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums text-xs">
+                    {c.squareFeet ? c.squareFeet.toLocaleString() : "-"}
+                  </TableCell>
                   <TableCell>
-                    <Badge
-                      className={
-                        TYPE_COLORS[c.type || "other"] || TYPE_COLORS.other
-                      }
-                    >
+                    <Badge className={TYPE_COLORS[c.type || "other"] || TYPE_COLORS.other}>
                       {c.type || "other"}
                     </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {[c.city, c.state].filter(Boolean).join(", ") || "-"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {formatDate(c.createdAt)}
                   </TableCell>
                   <TableCell>
                     <Button
