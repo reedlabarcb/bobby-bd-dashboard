@@ -26,7 +26,23 @@ export async function searchPeople(query: {
   company?: string;
   title?: string;
   city?: string;
+  linkedinUrl?: string;
 }): Promise<Record<string, unknown>> {
+  // LinkedIn URL is a near-perfect match key — when we have one, hit
+  // /people/match directly instead of /mixed_people/search.
+  if (query.linkedinUrl) {
+    const res = await fetch(`${APOLLO_BASE}/people/match`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Api-Key": getKey(),
+      },
+      body: JSON.stringify({ linkedin_url: query.linkedinUrl }),
+    });
+    if (!res.ok) throw new Error(`Apollo API error: ${res.status}`);
+    return res.json();
+  }
+
   const params: Record<string, unknown> = {
     per_page: 5,
   };

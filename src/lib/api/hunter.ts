@@ -7,7 +7,13 @@ function getKey(): string {
   return process.env.HUNTER_API_KEY;
 }
 
-export async function findEmail(name: string, domain: string): Promise<{
+// Pass either {domain} or {company} — Hunter resolves the domain itself when
+// you give it a company name, which is what we usually want (constructing
+// `<companyname>.com` is wrong for most real businesses).
+export async function findEmail(
+  name: string,
+  lookup: { domain?: string; company?: string },
+): Promise<{
   email: string | null;
   score: number;
   sources: number;
@@ -16,11 +22,13 @@ export async function findEmail(name: string, domain: string): Promise<{
   const lastName = rest.join(" ");
 
   const params = new URLSearchParams({
-    domain,
     first_name: firstName,
     last_name: lastName,
     api_key: getKey(),
   });
+  if (lookup.domain) params.set("domain", lookup.domain);
+  else if (lookup.company) params.set("company", lookup.company);
+  else throw new Error("findEmail requires domain or company");
 
   const res = await fetch(`${HUNTER_BASE}/email-finder?${params}`);
   if (!res.ok) throw new Error(`Hunter API error: ${res.status}`);

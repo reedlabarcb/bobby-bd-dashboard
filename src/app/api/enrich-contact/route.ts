@@ -30,6 +30,12 @@ export async function POST(request: Request) {
     const enrichmentResults: Record<string, unknown>[] = [];
     const errors: string[] = [];
 
+    // LinkedIn URLs from the prospecting-sheet importer land in `notes`. Pull
+    // it out as a stronger match key for Apollo and as a hint for Hunter.
+    const linkedinFromNotes = contact.notes?.match(
+      /linkedin\.com\/in\/[A-Za-z0-9_-]+\/?/i,
+    )?.[0];
+
     // Step 1: Apollo — title, company, phone, LinkedIn URL
     try {
       let apolloData: Record<string, unknown> = {};
@@ -40,6 +46,9 @@ export async function POST(request: Request) {
           name: contact.name,
           company: contact.company || undefined,
           city: contact.city || undefined,
+          linkedinUrl: linkedinFromNotes
+            ? `https://www.${linkedinFromNotes}`
+            : undefined,
         });
       }
       saveEnrichment(contactId, "apollo", apolloData);
@@ -48,11 +57,14 @@ export async function POST(request: Request) {
       errors.push(`Apollo: ${e instanceof Error ? e.message : "failed"}`);
     }
 
-    // Step 2: Hunter — find/verify email if missing
+    // Step 2: Hunter — find/verify email if missing.
+    // Pass company name (not a fake domain): Hunter does its own domain
+    // resolution and will find e.g. "Sharp Rees-Stealy" → sharp.com.
     try {
       if (!contact.email && contact.company) {
-        const domain = contact.company.toLowerCase().replace(/\s+/g, "") + ".com";
-        const hunterData = await findEmail(contact.name, domain);
+        const hunterData = await findEmail(contact.name, {
+          company: contact.company,
+        });
         saveEnrichment(contactId, "hunter", hunterData);
         enrichmentResults.push({ source: "hunter", data: hunterData });
       } else if (contact.email) {
