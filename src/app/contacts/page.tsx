@@ -20,11 +20,19 @@ export default async function ContactsPage({
   const view = (Array.isArray(sp.view) ? sp.view[0] : sp.view) || "flat";
   const isFlat = view === "flat";
 
+  // People-only: exclude landlord-typed rows and rows whose `name` is clearly
+  // a company entity (LLC / LP / Inc / Trust / Holdings / etc.). These show
+  // up because the prospecting-sheet importer sometimes lands company-form
+  // landlords in the contacts table; the /contacts tab is for actual humans.
+  const COMPANY_ENTITY_RE =
+    /\b(LLC|L\.L\.C\.?|LP|L\.P\.?|LLP|L\.L\.P\.?|Inc\.?|Incorporated|Corp\.?|Corporation|Trust|Holdings?|Investments?|Realty|Capital|Partners|Properties|Property|Group|Ltd\.?|Co\.?|Company|Associates|Enterprises|Ventures|Realty)\b/i;
+
   const allContacts = db
     .select()
     .from(contacts)
     .orderBy(desc(contacts.createdAt))
-    .all();
+    .all()
+    .filter((c) => c.type !== "landlord" && !COMPANY_ENTITY_RE.test(c.name));
 
   // Pull every lease joined to its tenant so we can pin the soonest-expiring
   // lease onto each contact via company-name match.

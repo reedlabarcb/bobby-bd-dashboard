@@ -54,7 +54,7 @@ export type ContactWithLease = Contact & {
   propertyAddress: string | null;
 };
 
-type SortField = "name" | "company" | "title" | "type" | "monthsRemaining" | "squareFeet";
+type SortField = "name" | "title" | "type" | "monthsRemaining" | "squareFeet";
 type SortDir = "asc" | "desc";
 
 const TYPE_COLORS: Record<string, string> = {
@@ -497,17 +497,12 @@ export function ContactsTable({
             <TableRow className="bg-muted/30 hover:bg-muted/30">
               <TableHead>
                 <button onClick={() => toggleSort("name")} className="flex items-center font-medium">
-                  Name <SortIcon field="name" />
+                  Name / Company <SortIcon field="name" />
                 </button>
               </TableHead>
               <TableHead>
                 <button onClick={() => toggleSort("title")} className="flex items-center font-medium">
                   Title <SortIcon field="title" />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button onClick={() => toggleSort("company")} className="flex items-center font-medium">
-                  Company <SortIcon field="company" />
                 </button>
               </TableHead>
               <TableHead>Email</TableHead>
@@ -533,7 +528,7 @@ export function ContactsTable({
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
                   No contacts found
                 </TableCell>
               </TableRow>
@@ -544,11 +539,15 @@ export function ContactsTable({
                   className="cursor-pointer"
                   onClick={() => router.push(`/contacts/${c.id}`)}
                 >
-                  <TableCell className="font-medium">{c.name}</TableCell>
+                  <TableCell>
+                    <div className="font-medium leading-tight">{c.name}</div>
+                    <div className="text-xs text-muted-foreground truncate max-w-[220px]">
+                      {c.company || <span className="italic">no company</span>}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-muted-foreground text-xs">
                     {c.title || "-"}
                   </TableCell>
-                  <TableCell>{c.company || "-"}</TableCell>
                   <TableCell className="text-muted-foreground text-xs">
                     {c.email || "-"}
                   </TableCell>
