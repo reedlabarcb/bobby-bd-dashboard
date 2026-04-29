@@ -17,7 +17,7 @@ function saveEnrichment(contactId: number, source: string, data: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const { contactId } = await request.json();
+    const { contactId, autoApply } = await request.json();
     if (!contactId) {
       return NextResponse.json({ error: "contactId required" }, { status: 400 });
     }
@@ -130,7 +130,23 @@ export async function POST(request: Request) {
       };
     }
 
-    return NextResponse.json({ diff, errors, enrichmentCount: enrichmentResults.length });
+    // Bulk mode: apply the diff immediately and return what was applied. Used
+    // by the /enrich bulk runner so we don't need a per-contact PUT roundtrip.
+    let applied = false;
+    if (autoApply && Object.keys(diff).length > 0) {
+      const updateValues: Record<string, string> = {};
+      for (const [k, v] of Object.entries(diff)) updateValues[k] = v.new;
+      db.update(contacts)
+        .set({
+          ...updateValues,
+          updatedAt: new Date().toISOString().replace("T", " ").split(".")[0],
+        })
+        .where(eq(contacts.id, contactId))
+        .run();
+      applied = true;
+    }
+
+    return NextResponse.json({ diff, applied, errors, enrichmentCount: enrichmentResults.length });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Enrichment failed" },
