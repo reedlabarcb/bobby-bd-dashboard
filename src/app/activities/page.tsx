@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { activities, contacts, deals } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { ActivitiesFeed } from "@/components/activities-feed";
+import { AskBar } from "@/components/ask-bar";
 
 export default async function ActivitiesPage() {
   const allActivities = await db
@@ -39,9 +40,12 @@ export default async function ActivitiesPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Activities</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          All logged calls, emails, meetings, and notes
+          Ask anything about your data, or browse logged calls, emails, meetings, and notes.
         </p>
       </div>
+
+      <AskBar />
+
       <ActivitiesFeed
         activities={allActivities}
         contacts={allContacts}
