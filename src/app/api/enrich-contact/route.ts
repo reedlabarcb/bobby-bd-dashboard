@@ -2,10 +2,25 @@ import { db } from "@/lib/db";
 import { contacts, contactEnrichments } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { enrichContact as apolloEnrich, searchPeople } from "@/lib/api/apollo";
-import { findEmail, verifyEmail } from "@/lib/api/hunter";
+import { domainSearch, findEmail, verifyEmail } from "@/lib/api/hunter";
 import { scrapeLinkedIn } from "@/lib/api/apify";
 import { synthesizeContactInfo } from "@/lib/api/anthropic";
 import { NextResponse } from "next/server";
+
+// Loose name match: fold case + diacritics + trim, then check that all
+// last-name tokens appear in the candidate's full name. This handles
+// "Hanna" vs "John Hanna" and "Susan Green" vs "Green, Susan".
+function namesMatch(target: string, candidateFirst: string | null, candidateLast: string | null): boolean {
+  const candidate = [candidateFirst, candidateLast].filter(Boolean).join(" ").toLowerCase().trim();
+  if (!candidate) return false;
+  const targetTokens = target
+    .toLowerCase()
+    .replace(/[,.]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length > 1);
+  if (targetTokens.length === 0) return false;
+  return targetTokens.every((t) => candidate.includes(t));
+}
 
 function saveEnrichment(contactId: number, source: string, data: unknown) {
   db.insert(contactEnrichments).values({
@@ -57,11 +72,46 @@ export async function POST(request: Request) {
       errors.push(`Apollo: ${e instanceof Error ? e.message : "failed"}`);
     }
 
-    // Step 2: Hunter — find/verify email if missing.
-    // Pass company name (not a fake domain): Hunter does its own domain
-    // resolution and will find e.g. "Sharp Rees-Stealy" → sharp.com.
+    // Step 2a: Hunter domain-search — pull the full org email list and
+    // match by name. This is the highest-yield Hunter call when Apollo's
+    // free-tier search returns redacted records (which it usually does).
+    let hunterDomainHit: Record<string, unknown> | null = null;
+    if (contact.company && process.env.HUNTER_API_KEY) {
+      try {
+        const ds = await domainSearch(
+          { company: contact.company },
+          { limit: 100, onlyPersonal: true },
+        );
+        const match = ds.emails.find((e) =>
+          namesMatch(contact.name, e.first_name, e.last_name),
+        );
+        if (match) {
+          hunterDomainHit = {
+            email: match.value,
+            position: match.position,
+            phone: match.phone_number,
+            linkedin: match.linkedin,
+            confidence: match.confidence,
+            organization: ds.organization,
+          };
+          saveEnrichment(contactId, "hunter-domain", hunterDomainHit);
+          enrichmentResults.push({ source: "hunter-domain", data: hunterDomainHit });
+        } else {
+          // Still record what we tried — useful for debugging.
+          enrichmentResults.push({
+            source: "hunter-domain",
+            data: { totalEmailsScanned: ds.emails.length, organization: ds.organization, matched: false },
+          });
+        }
+      } catch (e) {
+        errors.push(`Hunter domain-search: ${e instanceof Error ? e.message : "failed"}`);
+      }
+    }
+
+    // Step 2b: Hunter find-email or verify. Skip if domain-search already
+    // found this person — the domain hit has the email already.
     try {
-      if (!contact.email && contact.company) {
+      if (!hunterDomainHit && !contact.email && contact.company) {
         const hunterData = await findEmail(contact.name, {
           company: contact.company,
         });
@@ -93,21 +143,59 @@ export async function POST(request: Request) {
       errors.push(`Apify: ${e instanceof Error ? e.message : "failed"}`);
     }
 
-    // Step 4: Claude — synthesize everything
-    let updates: Record<string, string> = {};
+    // Step 4: build deterministic updates from the strongest signals first.
+    // Claude only refines / adds a summary on top — we don't gate the diff
+    // on Claude succeeding, so a transient Anthropic failure doesn't kill
+    // an otherwise-good Hunter hit.
+    const updates: Record<string, string> = {};
+
+    function setIfBetter(field: string, value: string | null | undefined) {
+      if (!value) return;
+      const current = (contact as unknown as Record<string, string | null>)[field];
+      if (current && current.length > 0) return; // never overwrite existing data here
+      updates[field] = value;
+    }
+
+    if (hunterDomainHit) {
+      setIfBetter("email", hunterDomainHit.email as string | null);
+      setIfBetter("phone", hunterDomainHit.phone as string | null);
+      setIfBetter("title", hunterDomainHit.position as string | null);
+      // Stash LinkedIn into notes if not already there.
+      const li = hunterDomainHit.linkedin as string | null;
+      if (li && !(contact.notes || "").includes(li)) {
+        const prefix = contact.notes ? `${contact.notes}\n` : "";
+        updates.notes = `${prefix}LinkedIn: ${li}`;
+      }
+    }
+
+    // Pull anything else Hunter findEmail / Apollo gave us.
+    const hunterFind = enrichmentResults.find((r) => r.source === "hunter")?.data as
+      | { email?: string | null; score?: number }
+      | undefined;
+    if (hunterFind?.email && (hunterFind.score ?? 0) >= 50) {
+      setIfBetter("email", hunterFind.email);
+    }
+
     let summary = "";
     try {
-      if (!process.env.ANTHROPIC_API_KEY) {
-        errors.push("Claude: ANTHROPIC_API_KEY not configured");
-      } else {
+      if (process.env.ANTHROPIC_API_KEY) {
         const synthesis = await synthesizeContactInfo(
           contact.name,
           contact as unknown as Record<string, unknown>,
-          enrichmentResults
+          enrichmentResults,
         );
         saveEnrichment(contactId, "claude", synthesis);
-        updates = synthesis.updates;
+        // Claude can fill in fields we still don't have, but never overwrites
+        // what we already chose deterministically above.
+        for (const [k, v] of Object.entries(synthesis.updates || {})) {
+          if (v && !updates[k]) {
+            const current = (contact as unknown as Record<string, string | null>)[k];
+            if (!current) updates[k] = v;
+          }
+        }
         summary = synthesis.summary;
+      } else {
+        errors.push("Claude: ANTHROPIC_API_KEY not configured");
       }
     } catch (e) {
       errors.push(`Claude: ${e instanceof Error ? e.message : "failed"}`);

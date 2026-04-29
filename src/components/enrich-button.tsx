@@ -45,7 +45,10 @@ export function EnrichButton({ contactId }: { contactId: number }) {
       if (data.diff && Object.keys(data.diff).length > 0) {
         setDiff(data.diff);
       } else {
-        toast.info("No new enrichment data found");
+        // Show what we actually tried instead of a vacuous "no data" toast.
+        const sources = (data.errors?.length ? data.errors.join(" · ") : null)
+          ?? `${data.enrichmentCount ?? 0} of 4 providers responded — none returned new fields`;
+        toast.info(sources, { duration: 7000 });
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Enrichment failed");
