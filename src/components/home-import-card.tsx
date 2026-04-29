@@ -3,16 +3,16 @@
 import { useState, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Upload, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet } from "lucide-react";
+import { Upload, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet, FileText, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
-type ImportType = "prospecting" | "contacts";
+type ExcelFormat = "prospecting" | "contacts";
 
-const IMPORT_OPTIONS: Record<ImportType, { label: string; hint: string; endpoint: string }> = {
+const EXCEL_OPTIONS: Record<ExcelFormat, { label: string; hint: string; endpoint: string }> = {
   prospecting: {
     label: "Rent roll / lease tracker (full)",
-    hint: "Buildings + tenants + leases + contacts. Use for prospecting sheets, LXDs, rent rolls, or any multi-entity Excel.",
+    hint: "Buildings + tenants + leases + contacts. Use for prospecting sheets, LXDs, or any multi-entity Excel.",
     endpoint: "/api/import-prospecting-sheet",
   },
   contacts: {
@@ -22,83 +22,129 @@ const IMPORT_OPTIONS: Record<ImportType, { label: string; hint: string; endpoint
   },
 };
 
-type ImportResult =
-  | {
-      kind: "prospecting";
-      stats: {
-        sheets: number;
-        rowsProcessed: number;
-        rowsSkipped: number;
-        buildingsCreated: number;
-        tenantsCreated: number;
-        leasesInserted: number;
-        contactsCreated: number;
-        landlordContactsCreated: number;
-        errors: string[];
-      };
-    }
-  | {
-      kind: "contacts";
-      imported: number;
-      updated: number;
-      skipped: number;
-      total: number;
-    };
+type FileState = "queued" | "processing" | "done" | "error" | "skipped";
+type FileRow = {
+  file: File;
+  state: FileState;
+  message?: string;
+  detail?: string;
+};
+
+function classify(filename: string): "pdf" | "excel" | "other" {
+  const ext = filename.split(".").pop()?.toLowerCase() || "";
+  if (ext === "pdf") return "pdf";
+  if (["xlsx", "xls", "csv"].includes(ext)) return "excel";
+  return "other";
+}
+
+function summarizeProspecting(stats: Record<string, number>): string {
+  const parts: string[] = [];
+  if (stats.buildingsCreated) parts.push(`${stats.buildingsCreated} buildings`);
+  if (stats.tenantsCreated) parts.push(`${stats.tenantsCreated} tenants`);
+  if (stats.leasesInserted) parts.push(`${stats.leasesInserted} leases`);
+  if (stats.contactsCreated) parts.push(`${stats.contactsCreated} contacts`);
+  return parts.length ? parts.join(" · ") : "no new records";
+}
 
 export function HomeImportCard() {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [importType, setImportType] = useState<ImportType>("prospecting");
-  const [file, setFile] = useState<File | null>(null);
+  const [excelFormat, setExcelFormat] = useState<ExcelFormat>("prospecting");
+  const [files, setFiles] = useState<FileRow[]>([]);
   const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<ImportResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  async function submit() {
-    if (!file) {
-      toast.error("Pick a file first");
+  const hasExcel = files.some((f) => classify(f.file.name) === "excel");
+
+  function addFiles(list: FileList | null) {
+    if (!list) return;
+    const next: FileRow[] = Array.from(list).map((file) => ({ file, state: "queued" }));
+    setFiles((prev) => [...prev, ...next]);
+  }
+
+  function removeFile(idx: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function clearAll() {
+    setFiles([]);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  async function processOne(row: FileRow): Promise<FileRow> {
+    const kind = classify(row.file.name);
+    if (kind === "other") {
+      return { ...row, state: "skipped", message: "unsupported file type" };
+    }
+    const endpoint =
+      kind === "pdf" ? "/api/process-document" : EXCEL_OPTIONS[excelFormat].endpoint;
+    try {
+      const formData = new FormData();
+      formData.append("file", row.file);
+      const res = await fetch(endpoint, { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        return { ...row, state: "error", message: data.error || `HTTP ${res.status}` };
+      }
+      if (kind === "pdf") {
+        return {
+          ...row,
+          state: "done",
+          message: data.aiSummary
+            ? `OM parsed`
+            : data.documentType
+            ? `${data.documentType} parsed`
+            : "parsed",
+          detail:
+            (data.propertyName && data.propertyAddress)
+              ? `${data.propertyName} · ${data.propertyAddress}`
+              : data.propertyName || data.propertyAddress || data.filename,
+        };
+      }
+      // Excel response shape varies by endpoint.
+      if (excelFormat === "prospecting" && data.stats) {
+        return { ...row, state: "done", message: summarizeProspecting(data.stats) };
+      }
+      if (excelFormat === "contacts") {
+        return {
+          ...row,
+          state: "done",
+          message: `${data.imported ?? 0} new · ${data.updated ?? 0} updated · ${data.skipped ?? 0} skipped`,
+        };
+      }
+      return { ...row, state: "done", message: "imported" };
+    } catch (e) {
+      return { ...row, state: "error", message: e instanceof Error ? e.message : "request failed" };
+    }
+  }
+
+  async function runAll() {
+    if (files.length === 0) {
+      toast.error("Add at least one file first");
       return;
     }
     setRunning(true);
-    setError(null);
-    setResult(null);
+    let totalDone = 0;
+    let totalErr = 0;
 
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch(IMPORT_OPTIONS[importType].endpoint, {
-        method: "POST",
-        body: formData,
+    for (let i = 0; i < files.length; i++) {
+      setFiles((prev) => {
+        const next = [...prev];
+        next[i] = { ...next[i], state: "processing" };
+        return next;
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || `HTTP ${res.status}`);
-        toast.error(data.error || "Import failed");
-        return;
-      }
-
-      if (importType === "prospecting") {
-        setResult({ kind: "prospecting", stats: data.stats });
-        const s = data.stats;
-        toast.success(
-          `Imported ${s.buildingsCreated} buildings · ${s.tenantsCreated} tenants · ${s.leasesInserted} leases · ${s.contactsCreated} contacts`,
-        );
-      } else {
-        setResult({ kind: "contacts", imported: data.imported, updated: data.updated, skipped: data.skipped, total: data.total });
-        toast.success(`Imported ${data.imported} new contacts (${data.updated} updated, ${data.skipped} skipped)`);
-      }
-
-      setFile(null);
-      if (fileRef.current) fileRef.current.value = "";
-      router.refresh();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "request failed";
-      setError(msg);
-      toast.error(msg);
-    } finally {
-      setRunning(false);
+      const result = await processOne(files[i]);
+      setFiles((prev) => {
+        const next = [...prev];
+        next[i] = result;
+        return next;
+      });
+      if (result.state === "done") totalDone += 1;
+      if (result.state === "error") totalErr += 1;
     }
+
+    setRunning(false);
+    toast.success(`Processed ${totalDone}/${files.length} file${files.length === 1 ? "" : "s"}${totalErr ? `, ${totalErr} errors` : ""}`);
+    router.refresh();
   }
 
   return (
@@ -106,22 +152,26 @@ export function HomeImportCard() {
       <CardHeader>
         <div className="flex items-center gap-2">
           <Upload className="h-4 w-4 text-blue-400" />
-          <CardTitle className="text-base font-medium">Import Excel</CardTitle>
+          <CardTitle className="text-base font-medium">Import Files</CardTitle>
         </div>
         <CardDescription>
-          Rent rolls, contact lists, lease trackers — drop in any Excel and pick the format.
+          Drop in OMs (PDF) or Excel (rent rolls, lease trackers, contact lists). Multi-select supported — files are auto-routed by extension.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Format picker */}
-        <div className="space-y-2">
-          {(Object.keys(IMPORT_OPTIONS) as ImportType[]).map((key) => {
-            const opt = IMPORT_OPTIONS[key];
-            const selected = importType === key;
+        {/* Excel format picker — only relevant if Excel files are in the queue */}
+        <div className={`space-y-2 ${hasExcel ? "" : "opacity-40 pointer-events-none"}`}>
+          <div className="text-xs font-medium text-muted-foreground flex items-center gap-2">
+            Excel format
+            {!hasExcel ? <span className="text-[10px]">(no Excel files queued)</span> : null}
+          </div>
+          {(Object.keys(EXCEL_OPTIONS) as ExcelFormat[]).map((key) => {
+            const opt = EXCEL_OPTIONS[key];
+            const selected = excelFormat === key;
             return (
               <label
                 key={key}
-                className={`flex items-start gap-3 rounded-md border p-3 cursor-pointer transition-colors ${
+                className={`flex items-start gap-3 rounded-md border p-2.5 cursor-pointer transition-colors ${
                   selected
                     ? "border-blue-500/50 bg-blue-500/5"
                     : "border-border bg-zinc-900/40 hover:border-zinc-700"
@@ -129,9 +179,9 @@ export function HomeImportCard() {
               >
                 <input
                   type="radio"
-                  name="importType"
+                  name="excelFormat"
                   checked={selected}
-                  onChange={() => setImportType(key)}
+                  onChange={() => setExcelFormat(key)}
                   disabled={running}
                   className="mt-1"
                 />
@@ -144,87 +194,95 @@ export function HomeImportCard() {
           })}
         </div>
 
-        {/* File picker + submit */}
+        {/* File picker + run */}
         <div className="flex items-center gap-3">
           <input
             ref={fileRef}
             type="file"
-            accept=".xlsx,.xls,.csv"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
+            multiple
+            accept=".pdf,.xlsx,.xls,.csv"
+            onChange={(e) => {
+              addFiles(e.target.files);
+              if (fileRef.current) fileRef.current.value = "";
+            }}
             disabled={running}
             className="flex-1 text-xs file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-zinc-100 hover:file:bg-zinc-700 disabled:opacity-50"
           />
-          <Button onClick={submit} disabled={running || !file}>
+          {files.length > 0 ? (
+            <Button onClick={clearAll} disabled={running} variant="outline" size="sm">
+              Clear
+            </Button>
+          ) : null}
+          <Button onClick={runAll} disabled={running || files.length === 0}>
             {running ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Importing...
+                Processing...
               </>
             ) : (
               <>
-                <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Import
+                <Upload className="h-4 w-4 mr-2" />
+                Process {files.length || ""}
               </>
             )}
           </Button>
         </div>
 
-        {/* Result */}
-        {error ? (
-          <div className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/5 p-3 text-xs">
-            <AlertCircle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
-            <div>
-              <div className="font-medium text-red-300">Import failed</div>
-              <div className="text-red-300/80 mt-0.5">{error}</div>
-            </div>
-          </div>
-        ) : null}
-
-        {result?.kind === "prospecting" ? (
-          <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs">
-            <div className="flex items-center gap-2 text-emerald-400 font-medium mb-2">
-              <CheckCircle2 className="h-4 w-4" />
-              Imported {result.stats.sheets} sheet{result.stats.sheets === 1 ? "" : "s"}, {result.stats.rowsProcessed} rows
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
-              <span>Buildings created: <span className="text-zinc-200 font-medium">{result.stats.buildingsCreated}</span></span>
-              <span>Tenants created: <span className="text-zinc-200 font-medium">{result.stats.tenantsCreated}</span></span>
-              <span>Leases inserted: <span className="text-zinc-200 font-medium">{result.stats.leasesInserted}</span></span>
-              <span>Contacts created: <span className="text-zinc-200 font-medium">{result.stats.contactsCreated}</span></span>
-              {result.stats.landlordContactsCreated > 0 ? (
-                <span>Landlords: <span className="text-zinc-200 font-medium">{result.stats.landlordContactsCreated}</span></span>
-              ) : null}
-              {result.stats.rowsSkipped > 0 ? (
-                <span>Rows skipped: <span className="text-amber-300 font-medium">{result.stats.rowsSkipped}</span></span>
-              ) : null}
-            </div>
-            {result.stats.errors.length > 0 ? (
-              <div className="mt-2 pt-2 border-t border-emerald-500/20">
-                <div className="text-amber-300 font-medium mb-1">{result.stats.errors.length} non-fatal error{result.stats.errors.length === 1 ? "" : "s"}:</div>
-                <ul className="space-y-0.5 text-amber-300/80 max-h-24 overflow-y-auto">
-                  {result.stats.errors.slice(0, 5).map((e, i) => (
-                    <li key={i} className="truncate">· {e}</li>
-                  ))}
-                  {result.stats.errors.length > 5 ? (
-                    <li className="text-amber-300/60">…{result.stats.errors.length - 5} more</li>
+        {/* File queue */}
+        {files.length > 0 ? (
+          <div className="rounded-md border border-border bg-zinc-950/40 divide-y divide-border max-h-72 overflow-y-auto">
+            {files.map((row, idx) => {
+              const kind = classify(row.file.name);
+              const Icon = kind === "pdf" ? FileText : FileSpreadsheet;
+              const iconColor =
+                kind === "pdf" ? "text-red-400" : kind === "excel" ? "text-emerald-400" : "text-zinc-500";
+              return (
+                <div key={idx} className="flex items-center gap-3 px-3 py-2 text-xs">
+                  <Icon className={`h-4 w-4 shrink-0 ${iconColor}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">{row.file.name}</div>
+                    {row.detail ? (
+                      <div className="text-[11px] text-muted-foreground truncate">{row.detail}</div>
+                    ) : null}
+                  </div>
+                  <div className="text-right min-w-[180px] shrink-0">
+                    {row.state === "queued" ? (
+                      <span className="text-muted-foreground">queued</span>
+                    ) : row.state === "processing" ? (
+                      <span className="flex items-center gap-1.5 justify-end text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        {kind === "pdf" ? "Claude parsing..." : "Importing..."}
+                      </span>
+                    ) : row.state === "done" ? (
+                      <span className="flex items-center gap-1.5 justify-end text-emerald-400">
+                        <CheckCircle2 className="h-3 w-3" />
+                        {row.message}
+                      </span>
+                    ) : row.state === "skipped" ? (
+                      <span className="text-amber-400">{row.message}</span>
+                    ) : (
+                      <span
+                        className="flex items-center gap-1.5 justify-end text-red-400"
+                        title={row.message}
+                      >
+                        <AlertCircle className="h-3 w-3" />
+                        {row.message?.slice(0, 32)}
+                      </span>
+                    )}
+                  </div>
+                  {!running ? (
+                    <button
+                      type="button"
+                      onClick={() => removeFile(idx)}
+                      className="text-muted-foreground hover:text-foreground"
+                      title="Remove from queue"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   ) : null}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {result?.kind === "contacts" ? (
-          <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs">
-            <div className="flex items-center gap-2 text-emerald-400 font-medium mb-2">
-              <CheckCircle2 className="h-4 w-4" />
-              Processed {result.total} row{result.total === 1 ? "" : "s"}
-            </div>
-            <div className="grid grid-cols-3 gap-x-4 text-muted-foreground">
-              <span>New: <span className="text-zinc-200 font-medium">{result.imported}</span></span>
-              <span>Updated: <span className="text-zinc-200 font-medium">{result.updated}</span></span>
-              <span>Skipped: <span className="text-zinc-200 font-medium">{result.skipped}</span></span>
-            </div>
+                </div>
+              );
+            })}
           </div>
         ) : null}
       </CardContent>
