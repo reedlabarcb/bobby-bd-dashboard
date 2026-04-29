@@ -20,6 +20,8 @@ type RowResult = {
   state: RowState;
   fieldsChanged?: number;
   error?: string;
+  enrichmentCount?: number;
+  errors?: string[];
 };
 
 type Filter = "missing-email" | "missing-phone" | "missing-either" | "all";
@@ -83,6 +85,8 @@ export function BulkEnrichContacts({ contacts }: { contacts: Contact[] }) {
       return {
         state: "done",
         fieldsChanged: Object.keys(data.diff || {}).length,
+        enrichmentCount: data.enrichmentCount ?? 0,
+        errors: Array.isArray(data.errors) ? data.errors : [],
       };
     } catch (e) {
       return { state: "error", error: e instanceof Error ? e.message : "request failed" };
@@ -209,8 +213,18 @@ export function BulkEnrichContacts({ contacts }: { contacts: Contact[] }) {
                       <CheckCircle2 className="h-3 w-3" />
                       {result.fieldsChanged} field{result.fieldsChanged === 1 ? "" : "s"} updated
                     </span>
+                  ) : (result.errors?.length ?? 0) > 0 ? (
+                    <span
+                      className="flex items-center gap-1.5 text-amber-400 justify-end"
+                      title={result.errors?.join("\n")}
+                    >
+                      <AlertCircle className="h-3 w-3" />
+                      {result.errors![0].split(":")[0]} failed
+                    </span>
                   ) : (
-                    <span className="text-muted-foreground">no new data</span>
+                    <span className="text-muted-foreground" title={`enrichmentCount=${result.enrichmentCount}`}>
+                      no new data ({result.enrichmentCount}/3 sources hit)
+                    </span>
                   )
                 ) : result?.state === "error" ? (
                   <span className="flex items-center gap-1.5 text-red-500 justify-end" title={result.error}>

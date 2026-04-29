@@ -3,6 +3,7 @@ import { contacts, tenants } from "@/lib/db/schema";
 import { ne, sql } from "drizzle-orm";
 import { BulkEnrichTenants } from "@/components/bulk-enrich-tenants";
 import { BulkEnrichContacts } from "@/components/bulk-enrich-contacts";
+import { DiagnosticsCard } from "@/components/diagnostics-card";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,8 @@ export default async function EnrichPage() {
           Fill in missing emails/phones on existing contacts, or find new decision-makers at tenant companies.
         </p>
       </div>
+
+      <DiagnosticsCard />
 
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="rounded-lg border border-border bg-card p-4">
