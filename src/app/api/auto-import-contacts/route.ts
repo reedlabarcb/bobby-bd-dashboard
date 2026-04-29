@@ -19,10 +19,35 @@ function autoMapColumns(columns: string[]): Record<string, string> {
     }
   };
 
-  take("name", [/\bname\b/, /\bfull name\b/, /\bcontact( name)?\b/, /\bperson\b/]);
+  // Order matters — more specific patterns first so e.g. "Contact Name"
+  // beats "Property Name". Also explicitly avoid columns that look like
+  // a property/asset name (those are not people).
+  take("name", [
+    /\bcontact name\b/,
+    /\bfull name\b/,
+    /\bperson( name)?\b/,
+    /\bcontact\b/,
+    // Generic "name" as a final fallback — must NOT match property/business names.
+    /^name$/,
+  ]);
   take("email", [/\bemail\b/, /\be-?mail\b/]);
-  take("phone", [/\bphone\b/, /\bmobile\b/, /\bcell\b/, /\btel\b/, /\btelephone\b/]);
-  take("company", [/\bcompany\b/, /\bfirm\b/, /\borganization\b/, /\borg\b/, /\bemployer\b/, /\baccount\b/]);
+  take("phone", [
+    /\bdirect\b/, // direct line first if both direct + mobile present
+    /\bmobile\b/,
+    /\bcell\b/,
+    /\bphone\b/,
+    /\btel\b/,
+    /\btelephone\b/,
+  ]);
+  take("company", [
+    /\bcompany\b/,
+    /\btenant\b/, // CRE-specific: tenant name often acts as company on these sheets
+    /\bfirm\b/,
+    /\borganization\b/,
+    /\borg\b/,
+    /\bemployer\b/,
+    /\baccount\b/,
+  ]);
   take("title", [/\btitle\b/, /\brole\b/, /\bposition\b/, /\bjob\b/]);
   take("city", [/\bcity\b/, /\btown\b/]);
   take("state", [/\bstate\b/, /\bprovince\b/, /\bregion\b/]);
@@ -53,13 +78,37 @@ export async function POST(request: Request) {
 
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array" });
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet);
 
-    if (rows.length === 0) {
+    // Pick the sheet most likely to contain contacts. We score each sheet's
+    // header row: +3 if it has a "Contact Name" / "Full Name" column, +2 if
+    // it has Email, +1 each for Phone / Title / Mobile / Direct. Highest
+    // score wins. Falls back to the first sheet.
+    type SheetCandidate = { name: string; rows: Record<string, unknown>[]; score: number };
+    const candidates: SheetCandidate[] = workbook.SheetNames.map((name) => {
+      const ws = workbook.Sheets[name];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
+      if (rows.length === 0) return { name, rows, score: -1 };
+      const cols = Object.keys(rows[0]).map((c) => c.toLowerCase());
+      let score = 0;
+      if (cols.some((c) => /\b(contact name|full name|person)\b/.test(c))) score += 3;
+      if (cols.some((c) => /\bemail\b/.test(c))) score += 2;
+      if (cols.some((c) => /\b(mobile|direct|phone|cell)\b/.test(c))) score += 1;
+      if (cols.some((c) => /\btitle\b/.test(c))) score += 1;
+      // Penalize sheets that look like property lists: lots of "address",
+      // "lease end", "rent" columns and no email.
+      if (cols.some((c) => /\blease end|annual rent|sf\b|square fe/.test(c))
+          && !cols.some((c) => /\bemail\b/.test(c))) score -= 3;
+      return { name, rows, score };
+    });
+    const winner = candidates
+      .filter((c) => c.rows.length > 0)
+      .sort((a, b) => b.score - a.score)[0];
+
+    if (!winner) {
       return NextResponse.json({ imported: 0, updated: 0, skipped: 0, mapping: {} });
     }
+    const sheetName = winner.name;
+    const rows = winner.rows;
 
     const columns = Object.keys(rows[0]);
     const mapping = autoMapColumns(columns);
@@ -68,10 +117,12 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Could not find a Name column. Expected one of: Name, Full Name, Contact, Person. " +
-            "Available columns: " +
+            "Could not find a Name column. Expected one of: Contact Name, Full Name, Name, Person. " +
+            `Available columns on sheet "${sheetName}": ` +
             columns.join(", "),
           columns,
+          sheetName,
+          allSheets: workbook.SheetNames,
         },
         { status: 400 }
       );
