@@ -755,7 +755,11 @@ function BuildingDetail({
                       <TableCell className="text-xs font-medium">
                         <button
                           type="button"
-                          onClick={() => onTenantClick(l)}
+                          onClick={(e) => {
+                            // Stop the building row from toggling its expand state.
+                            e.stopPropagation();
+                            onTenantClick(l);
+                          }}
                           disabled={enrichingTenantId === l.tenantId}
                           className={`inline-flex items-center gap-1.5 text-left transition-colors ${
                             l.tenantContactId
