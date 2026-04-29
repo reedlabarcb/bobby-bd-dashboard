@@ -13,6 +13,7 @@ import {
 import { Users, Building2, Activity, TrendingUp, Plus, Phone, Mail, Calendar, FileText } from "lucide-react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
+import { HomeImportCard } from "@/components/home-import-card";
 
 const activityIcons: Record<string, typeof Phone> = {
   call: Phone,
@@ -126,6 +127,9 @@ export default async function DashboardPage() {
           );
         })}
       </div>
+
+      {/* Import Excel */}
+      <HomeImportCard />
 
       {/* Recent Activity */}
       <Card className="border-0 bg-zinc-900/60">

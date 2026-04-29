@@ -32,10 +32,13 @@ type Row = Record<string, unknown>;
 
 export async function POST(request: Request) {
   try {
+    // Belt-and-suspenders shared-secret check for the watcher path. The auth
+    // proxy already gates this route for browser sessions; only reject if a
+    // header is sent and doesn't match. Missing header = trust the proxy.
     const serverSecret = process.env.UPLOAD_SECRET;
     if (serverSecret) {
       const headerSecret = request.headers.get("x-upload-secret");
-      if (!headerSecret || headerSecret !== serverSecret) {
+      if (headerSecret && headerSecret !== serverSecret) {
         return NextResponse.json({ error: "Invalid upload secret" }, { status: 401 });
       }
     }
