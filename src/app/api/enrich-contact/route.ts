@@ -46,30 +46,26 @@ export async function POST(request: Request) {
     const errors: string[] = [];
 
     // LinkedIn URLs from the prospecting-sheet importer land in `notes`. Pull
-    // it out as a stronger match key for Apollo and as a hint for Hunter.
+    // it out as the strongest signal we have — it's a person-specific URL that
+    // already maps to this contact, no fuzzy matching needed.
     const linkedinFromNotes = contact.notes?.match(
       /linkedin\.com\/in\/[A-Za-z0-9_-]+\/?/i,
     )?.[0];
+    const linkedinFullUrl = linkedinFromNotes ? `https://www.${linkedinFromNotes}` : null;
 
-    // Step 1: Apollo — title, company, phone, LinkedIn URL
-    try {
-      let apolloData: Record<string, unknown> = {};
-      if (contact.email) {
-        apolloData = await apolloEnrich(contact.email);
-      } else {
-        apolloData = await searchPeople({
-          name: contact.name,
-          company: contact.company || undefined,
-          city: contact.city || undefined,
-          linkedinUrl: linkedinFromNotes
-            ? `https://www.${linkedinFromNotes}`
-            : undefined,
-        });
+    // Step 1: Apify LinkedIn scrape — runs first when we already have a LinkedIn
+    // URL on the contact. LinkedIn has the most reliable title + company data
+    // and bypasses the Hunter coverage problem entirely. Skipped silently if
+    // APIFY_API_KEY isn't configured.
+    let apifyData: Record<string, unknown> | null = null;
+    if (linkedinFullUrl && process.env.APIFY_API_KEY) {
+      try {
+        apifyData = await scrapeLinkedIn(linkedinFullUrl);
+        saveEnrichment(contactId, "apify", apifyData);
+        enrichmentResults.push({ source: "apify", data: apifyData });
+      } catch (e) {
+        errors.push(`Apify: ${e instanceof Error ? e.message : "failed"}`);
       }
-      saveEnrichment(contactId, "apollo", apolloData);
-      enrichmentResults.push({ source: "apollo", data: apolloData });
-    } catch (e) {
-      errors.push(`Apollo: ${e instanceof Error ? e.message : "failed"}`);
     }
 
     // Step 2a: Hunter domain-search — pull the full org email list and
@@ -130,21 +126,27 @@ export async function POST(request: Request) {
       errors.push(`Hunter: ${e instanceof Error ? e.message : "failed"}`);
     }
 
-    // Step 3: Apify — scrape LinkedIn if we have a URL
-    try {
-      const apolloResult = enrichmentResults.find(r => r.source === "apollo");
-      const apolloData = apolloResult?.data as Record<string, unknown> | undefined;
-      const apolloPerson = apolloData?.person as Record<string, unknown> | undefined;
-      const linkedinUrl = (apolloData?.linkedin_url as string)
-        || (apolloPerson?.linkedin_url as string);
-
-      if (linkedinUrl && typeof linkedinUrl === "string") {
-        const linkedinData = await scrapeLinkedIn(linkedinUrl);
-        saveEnrichment(contactId, "apify", linkedinData);
-        enrichmentResults.push({ source: "apify", data: linkedinData });
+    // Step 3: Apollo — last-resort fallback. Often 403s on free-tier search
+    // (mixed_people/search requires paid plan now). If we already have a
+    // hit from Apify or Hunter, skip to save the credit.
+    if (!apifyData && !hunterDomainHit) {
+      try {
+        let apolloData: Record<string, unknown> = {};
+        if (contact.email) {
+          apolloData = await apolloEnrich(contact.email);
+        } else {
+          apolloData = await searchPeople({
+            name: contact.name,
+            company: contact.company || undefined,
+            city: contact.city || undefined,
+            linkedinUrl: linkedinFullUrl || undefined,
+          });
+        }
+        saveEnrichment(contactId, "apollo", apolloData);
+        enrichmentResults.push({ source: "apollo", data: apolloData });
+      } catch (e) {
+        errors.push(`Apollo: ${e instanceof Error ? e.message : "failed"}`);
       }
-    } catch (e) {
-      errors.push(`Apify: ${e instanceof Error ? e.message : "failed"}`);
     }
 
     // Step 4: build deterministic updates from the strongest signals first.
@@ -158,6 +160,28 @@ export async function POST(request: Request) {
       const current = (contact as unknown as Record<string, string | null>)[field];
       if (current && current.length > 0) return; // never overwrite existing data here
       updates[field] = value;
+    }
+
+    // Apify (LinkedIn scrape) wins for title/location since LinkedIn is the
+    // authoritative source for those.
+    if (apifyData) {
+      const headline = (apifyData.headline as string | undefined)
+        || (apifyData.position as string | undefined)
+        || (apifyData.jobTitle as string | undefined);
+      const location = apifyData.location as string | undefined;
+      const summary = apifyData.summary as string | undefined;
+      setIfBetter("title", headline ?? null);
+      if (location) {
+        const [city, state] = location.split(",").map((s) => s.trim());
+        setIfBetter("city", city ?? null);
+        setIfBetter("state", state ?? null);
+      }
+      if (summary && !(contact.notes || "").includes(summary.slice(0, 30))) {
+        const prefix = contact.notes ? `${contact.notes}\n\n` : "";
+        updates.notes = `${prefix}Bio: ${summary.slice(0, 500)}`;
+      }
+      // Apify rarely returns email/phone but try anyway.
+      setIfBetter("email", (apifyData.email as string | undefined) ?? null);
     }
 
     if (hunterDomainHit) {
