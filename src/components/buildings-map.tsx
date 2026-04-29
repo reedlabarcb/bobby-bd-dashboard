@@ -13,13 +13,13 @@ import { Separator } from "@/components/ui/separator";
 const DARK_STYLE: StyleSpecification = {
   version: 8,
   sources: {
-    "carto-dark": {
+    "carto-base": {
       type: "raster",
       tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
-        "https://d.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png",
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
       ],
       tileSize: 256,
       attribution:
@@ -28,16 +28,14 @@ const DARK_STYLE: StyleSpecification = {
   },
   layers: [
     {
-      id: "carto-dark",
+      id: "carto-base",
       type: "raster",
-      source: "carto-dark",
+      source: "carto-base",
       paint: {
-        // Lift the floor so deep blacks render as mid-gray.
-        // Keeps the dark theme but readable, not a void.
-        "raster-brightness-min": 0.35,
-        "raster-brightness-max": 1,
-        "raster-contrast": -0.1,
-        "raster-saturation": 0.1,
+        // Voyager is a mid-tone basemap. Light dim + slight desaturation so it
+        // still pairs with the dark dashboard chrome without feeling cave-dark.
+        "raster-brightness-max": 0.92,
+        "raster-saturation": -0.15,
       },
     },
   ],
