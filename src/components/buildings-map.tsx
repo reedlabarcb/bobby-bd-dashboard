@@ -31,12 +31,8 @@ const DARK_STYLE: StyleSpecification = {
       id: "carto-base",
       type: "raster",
       source: "carto-base",
-      paint: {
-        // Voyager is a mid-tone basemap. Light dim + slight desaturation so it
-        // still pairs with the dark dashboard chrome without feeling cave-dark.
-        "raster-brightness-max": 0.92,
-        "raster-saturation": -0.15,
-      },
+      // Voyager is designed to be readable — leave it alone. Earlier
+      // brightness/saturation tweaks washed out the street and place labels.
     },
   ],
 };
