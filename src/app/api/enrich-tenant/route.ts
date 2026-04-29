@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { contacts, contactEnrichments, tenants } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { searchPeople } from "@/lib/api/apollo";
-import { findEmail } from "@/lib/api/hunter";
+import { domainSearch, findEmail } from "@/lib/api/hunter";
 import { NextResponse } from "next/server";
 
 // Bob's approved decision-maker title filter (no Office Manager, no VP Finance).
@@ -17,7 +17,7 @@ const DECISION_MAKER_TITLES = [
   "VP Operations",
 ];
 
-const MAX_HITS_PER_TENANT = 3;
+const MAX_HITS_PER_TENANT = 5;
 
 type ApolloPerson = {
   id?: string;
@@ -56,22 +56,91 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
     }
 
-    // Apollo people search at this organization, filtered to decision-maker titles.
-    const apolloRaw = (await searchPeople({
-      company: tenant.name,
-      // Apollo OR's the title list internally — passing all 8 keeps recall high.
-    })) as Record<string, unknown>;
+    // PRIMARY: Hunter domain-search. The paid Hunter plan returns up to 100
+    // verified emails per call with name + position + linkedin, which gives
+    // us much richer hits than Apollo's people-search on the free tier.
+    const errors: string[] = [];
+    let hunterEmails: Awaited<ReturnType<typeof domainSearch>>["emails"] = [];
+    let resolvedOrganization: string | null = null;
+    try {
+      const hunter = await domainSearch(
+        { company: tenant.name },
+        { limit: 50, onlyPersonal: true },
+      );
+      hunterEmails = hunter.emails;
+      resolvedOrganization = hunter.organization;
+    } catch (e) {
+      errors.push(`Hunter: ${e instanceof Error ? e.message : "failed"}`);
+    }
 
-    // mixed_people/search returns `people` and `contacts` arrays; we want both.
-    const candidates: ApolloPerson[] = [
-      ...((apolloRaw.people as ApolloPerson[]) || []),
-      ...((apolloRaw.contacts as ApolloPerson[]) || []),
-    ];
+    // SECONDARY: Apollo people-search as a fallback when Hunter found nothing.
+    let apolloCandidates: ApolloPerson[] = [];
+    if (hunterEmails.length === 0) {
+      try {
+        const apolloRaw = (await searchPeople({
+          company: tenant.name,
+        })) as Record<string, unknown>;
+        apolloCandidates = [
+          ...((apolloRaw.people as ApolloPerson[]) || []),
+          ...((apolloRaw.contacts as ApolloPerson[]) || []),
+        ];
+      } catch (e) {
+        errors.push(`Apollo: ${e instanceof Error ? e.message : "failed"}`);
+      }
+    }
 
-    // Filter to titles Bob approved. Apollo's title field is freeform — match
-    // case-insensitive substring against any approved phrase.
-    const wanted = candidates.filter((p) => {
-      const title = (p.title || "").toLowerCase();
+    // Normalize Hunter+Apollo into a single candidate shape.
+    type Candidate = {
+      name: string;
+      title: string | null;
+      email: string | null;
+      phone: string | null;
+      mobile: string | null;
+      direct: string | null;
+      linkedin: string | null;
+      city: string | null;
+      state: string | null;
+      source: "hunter" | "apollo";
+      raw: unknown;
+    };
+
+    const merged: Candidate[] = [
+      ...hunterEmails.map<Candidate>((h) => ({
+        name: [h.first_name, h.last_name].filter(Boolean).join(" ").trim(),
+        title: h.position,
+        email: h.value,
+        phone: h.phone_number,
+        mobile: null,
+        direct: null,
+        linkedin: h.linkedin,
+        city: null,
+        state: null,
+        source: "hunter",
+        raw: h,
+      })),
+      ...apolloCandidates.map<Candidate>((p) => {
+        const phones = bestPhone(p);
+        return {
+          name: (p.name || [p.first_name, p.last_name].filter(Boolean).join(" ").trim()),
+          title: p.title || null,
+          email: p.email || null,
+          phone: phones.phone,
+          mobile: phones.mobile,
+          direct: phones.direct,
+          linkedin: p.linkedin_url || null,
+          city: p.city || null,
+          state: p.state || null,
+          source: "apollo",
+          raw: p,
+        };
+      }),
+    ].filter((c) => c.name.length > 0);
+
+    // Filter to decision-maker titles. Hunter's `position` and Apollo's
+    // `title` are both freeform — substring-match against Bob's approved list.
+    const wanted = merged.filter((c) => {
+      const title = (c.title || "").toLowerCase();
+      if (!title) return false;
       return DECISION_MAKER_TITLES.some((t) => title.includes(t.toLowerCase()));
     });
 
@@ -87,10 +156,7 @@ export async function POST(request: Request) {
     const skipped: string[] = [];
 
     for (const person of wanted.slice(0, MAX_HITS_PER_TENANT)) {
-      const personName = (
-        person.name ||
-        [person.first_name, person.last_name].filter(Boolean).join(" ").trim()
-      );
+      const personName = person.name;
       if (!personName) continue;
 
       if (existingNames.has(personName.toLowerCase().trim())) {
@@ -98,50 +164,53 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const { phone, mobile, direct } = bestPhone(person);
-      let email = person.email || null;
-
-      // Hunter fallback: if Apollo gave us a name but no email and we have a key, try to find one.
-      if (!email && process.env.HUNTER_API_KEY) {
+      // If Apollo gave us a person but no email, try Hunter findEmail.
+      let email = person.email;
+      if (!email && person.source === "apollo" && process.env.HUNTER_API_KEY) {
         try {
           const hunter = await findEmail(personName, { company: tenant.name });
           if (hunter.email && hunter.score >= 50) email = hunter.email;
         } catch {
-          // Hunter is best-effort here; ignore failures.
+          // best-effort
         }
       }
 
-      const tagsList = ["decision-maker", "tenant-contact", "apollo-enriched", `tenantId:${tenant.id}`];
+      const tagsList = [
+        "decision-maker",
+        "tenant-contact",
+        `${person.source}-enriched`,
+        `tenantId:${tenant.id}`,
+      ];
 
       const inserted = db
         .insert(contacts)
         .values({
           name: personName,
           email,
-          phone,
-          directPhone: direct,
-          mobilePhone: mobile,
+          phone: person.phone,
+          directPhone: person.direct,
+          mobilePhone: person.mobile,
           company: tenant.name,
           title: person.title || null,
           type: "other",
-          source: "apollo-tenant-enrichment",
+          source: `${person.source}-tenant-enrichment`,
           sourceFile: `enrich-tenant:${tenant.id}`,
           tags: JSON.stringify(tagsList),
           city: person.city || null,
           state: person.state || null,
-          notes: person.linkedin_url ? `LinkedIn: ${person.linkedin_url}` : null,
+          notes: person.linkedin ? `LinkedIn: ${person.linkedin}` : null,
         })
         .returning({ id: contacts.id })
         .get();
 
       created.push(inserted.id);
 
-      // Stash the raw Apollo record for later debugging / re-synth.
+      // Stash the raw record for later debugging / re-synth.
       db.insert(contactEnrichments)
         .values({
           contactId: inserted.id,
-          source: "apollo-tenant-search",
-          rawJson: JSON.stringify(person),
+          source: `${person.source}-tenant-search`,
+          rawJson: JSON.stringify(person.raw),
         })
         .run();
     }
@@ -149,10 +218,13 @@ export async function POST(request: Request) {
     return NextResponse.json({
       tenantId: tenant.id,
       tenantName: tenant.name,
-      candidatesFound: candidates.length,
+      resolvedOrganization,
+      hunterCandidates: hunterEmails.length,
+      apolloCandidates: apolloCandidates.length,
       candidatesMatchingTitles: wanted.length,
       createdContactIds: created,
       skippedExisting: skipped,
+      errors,
     });
   } catch (error) {
     return NextResponse.json(

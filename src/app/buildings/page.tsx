@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { db } from "@/lib/db";
 import { buildings, leases, tenants, contacts } from "@/lib/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, ne } from "drizzle-orm";
 import { BuildingsTable } from "@/components/buildings-table";
 
 export default async function BuildingsPage() {
@@ -29,7 +29,7 @@ export default async function BuildingsPage() {
     .all();
 
   // All leases, joined to tenant — grouped by building in the client.
-  const allLeases = db
+  const allLeasesRaw = db
     .select({
       id: leases.id,
       buildingId: leases.buildingId,
@@ -51,5 +51,27 @@ export default async function BuildingsPage() {
     .orderBy(asc(leases.leaseEndDate))
     .all();
 
-  return <BuildingsTable buildings={allBuildings} leases={allLeases} />;
+  // Build a "first contact at this company" lookup so the tenant cell on the
+  // table can deep-link to the actual person we have. Excludes landlord-typed
+  // rows so the link points at a real BD-relevant contact, not an LLC entry.
+  const peopleAtCompany = db
+    .select({ id: contacts.id, company: contacts.company })
+    .from(contacts)
+    .where(ne(contacts.type, "landlord"))
+    .all();
+  const firstContactByCompany = new Map<string, number>();
+  for (const p of peopleAtCompany) {
+    if (!p.company) continue;
+    const key = p.company.toLowerCase().trim();
+    if (!firstContactByCompany.has(key)) firstContactByCompany.set(key, p.id);
+  }
+
+  const allLeasesWithContact = allLeasesRaw.map((l) => ({
+    ...l,
+    tenantContactId: l.tenantName
+      ? firstContactByCompany.get(l.tenantName.toLowerCase().trim()) ?? null
+      : null,
+  }));
+
+  return <BuildingsTable buildings={allBuildings} leases={allLeasesWithContact} />;
 }

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import {
   Search,
   ArrowUpDown,
@@ -15,6 +16,8 @@ import {
   Users,
   Clock,
   AlertTriangle,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -68,6 +71,8 @@ type LeaseRow = {
   annualRent: number | null;
   leaseType: string | null;
   isSublease: number | null;
+  // First non-landlord contact at this tenant's company, if any.
+  tenantContactId: number | null;
 };
 
 type SortField =
@@ -163,7 +168,44 @@ export function BuildingsTable({
   const [sortField, setSortField] = useState<SortField>("soonestExpiry");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [enrichingTenantId, setEnrichingTenantId] = useState<number | null>(null);
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
+  const router = useRouter();
+
+  async function handleTenantClick(lease: LeaseRow) {
+    if (lease.tenantContactId) {
+      router.push(`/contacts/${lease.tenantContactId}`);
+      return;
+    }
+    if (enrichingTenantId !== null) return;
+    setEnrichingTenantId(lease.tenantId);
+    try {
+      toast.message(`Searching Apollo for decision-makers at ${lease.tenantName}…`);
+      const res = await fetch("/api/enrich-tenant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenantId: lease.tenantId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || `HTTP ${res.status}`);
+        return;
+      }
+      const newIds: number[] = data.createdContactIds || [];
+      if (newIds.length > 0) {
+        toast.success(`Created ${newIds.length} contact${newIds.length === 1 ? "" : "s"} at ${lease.tenantName}`);
+        router.push(`/contacts/${newIds[0]}`);
+        return;
+      }
+      toast.message(
+        `Apollo found ${data.candidatesFound ?? 0} candidates but none matched the decision-maker title filter.`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Enrichment failed");
+    } finally {
+      setEnrichingTenantId(null);
+    }
+  }
 
   // Deep-link support: ?id=<buildingId> → auto-expand + scroll into view.
   // Used by the /map popup's "Open in Buildings" link.
@@ -520,6 +562,8 @@ export function BuildingsTable({
                     if (el) rowRefs.current.set(b.id, el);
                     else rowRefs.current.delete(b.id);
                   }}
+                  onTenantClick={handleTenantClick}
+                  enrichingTenantId={enrichingTenantId}
                 />
               ))
             )}
@@ -535,11 +579,15 @@ function BuildingRowGroup({
   isExpanded,
   onToggle,
   rowRef,
+  onTenantClick,
+  enrichingTenantId,
 }: {
   building: EnrichedBuilding;
   isExpanded: boolean;
   onToggle: () => void;
   rowRef?: (el: HTMLTableRowElement | null) => void;
+  onTenantClick: (lease: LeaseRow) => void;
+  enrichingTenantId: number | null;
 }) {
   const color = urgencyColor(b.soonestMonths);
   const landlord = b.landlordContactName || b.landlordName;
@@ -629,7 +677,11 @@ function BuildingRowGroup({
       {isExpanded && (
         <TableRow className="bg-muted/30 hover:bg-muted/30">
           <TableCell colSpan={8} className="px-6 py-4">
-            <BuildingDetail building={b} />
+            <BuildingDetail
+              building={b}
+              onTenantClick={onTenantClick}
+              enrichingTenantId={enrichingTenantId}
+            />
           </TableCell>
         </TableRow>
       )}
@@ -637,7 +689,15 @@ function BuildingRowGroup({
   );
 }
 
-function BuildingDetail({ building: b }: { building: EnrichedBuilding }) {
+function BuildingDetail({
+  building: b,
+  onTenantClick,
+  enrichingTenantId,
+}: {
+  building: EnrichedBuilding;
+  onTenantClick: (lease: LeaseRow) => void;
+  enrichingTenantId: number | null;
+}) {
   return (
     <div className="space-y-4">
       {/* Property facts */}
@@ -693,7 +753,28 @@ function BuildingDetail({ building: b }: { building: EnrichedBuilding }) {
                   return (
                     <TableRow key={l.id}>
                       <TableCell className="text-xs font-medium">
-                        {l.tenantName}
+                        <button
+                          type="button"
+                          onClick={() => onTenantClick(l)}
+                          disabled={enrichingTenantId === l.tenantId}
+                          className={`inline-flex items-center gap-1.5 text-left transition-colors ${
+                            l.tenantContactId
+                              ? "text-blue-400 hover:text-blue-300 hover:underline"
+                              : "text-amber-300 hover:text-amber-200 hover:underline"
+                          } disabled:opacity-60`}
+                          title={
+                            l.tenantContactId
+                              ? "Open contact"
+                              : "No contact tracked — click to search Apollo for decision-makers"
+                          }
+                        >
+                          {l.tenantName}
+                          {enrichingTenantId === l.tenantId ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : !l.tenantContactId ? (
+                            <Sparkles className="h-3 w-3 opacity-70" />
+                          ) : null}
+                        </button>
                         {l.isSublease ? (
                           <span className="ml-1 text-[10px] text-muted-foreground">
                             (sublease)

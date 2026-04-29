@@ -41,6 +41,44 @@ export async function findEmail(
   };
 }
 
+export type HunterDomainEmail = {
+  value: string;
+  type: string; // "personal" | "generic"
+  confidence: number;
+  first_name: string | null;
+  last_name: string | null;
+  position: string | null;
+  seniority: string | null;
+  department: string | null;
+  linkedin: string | null;
+  phone_number: string | null;
+};
+
+// Hunter's domain-search returns every known email at a company (up to 100).
+// This is much richer than Apollo's people-search on free tiers — Hunter
+// actually surfaces verified emails + titles + linkedin URLs directly.
+export async function domainSearch(
+  lookup: { domain?: string; company?: string },
+  options: { limit?: number; onlyPersonal?: boolean } = {},
+): Promise<{ domain: string | null; organization: string | null; emails: HunterDomainEmail[] }> {
+  const params = new URLSearchParams({ api_key: getKey() });
+  if (lookup.domain) params.set("domain", lookup.domain);
+  else if (lookup.company) params.set("company", lookup.company);
+  else throw new Error("domainSearch requires domain or company");
+  params.set("limit", String(options.limit ?? 25));
+  if (options.onlyPersonal) params.set("type", "personal");
+
+  const res = await fetch(`${HUNTER_BASE}/domain-search?${params}`);
+  if (!res.ok) throw new Error(`Hunter domain-search error: ${res.status}`);
+
+  const data = await res.json();
+  return {
+    domain: data.data?.domain || null,
+    organization: data.data?.organization || null,
+    emails: (data.data?.emails || []) as HunterDomainEmail[],
+  };
+}
+
 export async function verifyEmail(email: string): Promise<{
   status: string;
   score: number;
