@@ -1,16 +1,17 @@
 import { db } from "@/lib/db";
-import { contacts, uploads } from "@/lib/db/schema";
+import { uploads } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import { NextResponse } from "next/server";
+import { upsertContact, countTable } from "@/lib/import-helpers";
+import { contacts } from "@/lib/db/schema";
 
-// Step 1: Preview — parse Excel and return columns + sample data
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File;
-    const action = formData.get("action") as string; // "preview" or "import"
-    const mapping = formData.get("mapping") as string; // JSON mapping for import
+    const action = formData.get("action") as string;
+    const mapping = formData.get("mapping") as string;
 
     if (!file) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
@@ -23,23 +24,22 @@ export async function POST(request: Request) {
     const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet);
 
     if (action === "preview" || !mapping) {
-      // Return column names and first 5 rows for mapping UI
       const columns = data.length > 0 ? Object.keys(data[0]) : [];
       const preview = data.slice(0, 5);
       return NextResponse.json({ columns, preview, totalRows: data.length });
     }
 
-    // Step 2: Import with mapping
     const columnMap: Record<string, string> = JSON.parse(mapping);
 
-    // Create upload record
     const upload = db.insert(uploads).values({
       filename: file.name,
       fileType: "excel",
       status: "processing",
     }).returning().get();
 
-    let created = 0;
+    const before = countTable(contacts);
+    let processed = 0;
+
     for (const row of data) {
       const mapped: Record<string, unknown> = {};
       for (const [contactField, excelColumn] of Object.entries(columnMap)) {
@@ -49,29 +49,31 @@ export async function POST(request: Request) {
       }
 
       if (mapped.name) {
-        db.insert(contacts).values({
-          name: mapped.name as string,
-          email: (mapped.email as string) || null,
-          phone: (mapped.phone as string) || null,
-          company: (mapped.company as string) || null,
-          title: (mapped.title as string) || null,
-          type: (mapped.type as "buyer" | "seller" | "broker" | "lender" | "other") || "other",
-          source: `Import: ${file.name}`,
-          city: (mapped.city as string) || null,
-          state: (mapped.state as string) || null,
-          notes: (mapped.notes as string) || null,
-        }).run();
-        created++;
+        upsertContact(
+          {
+            name: mapped.name as string,
+            email: (mapped.email as string) || null,
+            phone: (mapped.phone as string) || null,
+            company: (mapped.company as string) || null,
+            title: (mapped.title as string) || null,
+            type: (mapped.type as "buyer" | "seller" | "broker" | "lender" | "landlord" | "other") || "other",
+            notes: (mapped.notes as string) || null,
+          },
+          { sourceFile: file.name }
+        );
+        processed++;
       }
     }
 
-    // Update upload
+    const created = countTable(contacts) - before;
+    const updated = processed - created;
+
     db.update(uploads)
       .set({ status: "done", recordsCreated: created })
       .where(eq(uploads.id, upload.id))
       .run();
 
-    return NextResponse.json({ imported: created, total: data.length });
+    return NextResponse.json({ imported: processed, created, updated, total: data.length });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Import failed" },
