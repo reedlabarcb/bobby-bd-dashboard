@@ -24,6 +24,20 @@ export async function DELETE(request: Request) {
     }
   }
 
+  // Belt-and-suspenders: this endpoint is destructive (mass DELETE FROM
+  // contacts WHERE type='broker'). After Bob saw ~76 Centerpoint brokers
+  // disappear, we now require an explicit confirm token in the body so
+  // it can't fire from a stray request, a typo, or a future bug. Pass
+  // {confirm: "DELETE-ALL-BROKERS"} to actually run; without it we
+  // dry-run and return the count that would be deleted.
+  let body: { confirm?: string; dryRun?: boolean } = {};
+  try {
+    body = await request.json();
+  } catch {
+    // Empty body = dry run.
+  }
+  const confirmed = body.confirm === "DELETE-ALL-BROKERS";
+
   const beforeCount = Number(
     db
       .select({ c: sql<number>`count(*)` })
@@ -31,6 +45,14 @@ export async function DELETE(request: Request) {
       .where(eq(contacts.type, "broker"))
       .get()?.c ?? 0
   );
+
+  if (!confirmed) {
+    return NextResponse.json({
+      dryRun: true,
+      wouldDelete: beforeCount,
+      hint: 'send {"confirm":"DELETE-ALL-BROKERS"} in the body to actually run',
+    });
+  }
 
   if (beforeCount === 0) {
     return NextResponse.json({ ok: true, deleted: 0, fkNulled: 0 });
