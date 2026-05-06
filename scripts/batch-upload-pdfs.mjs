@@ -12,10 +12,10 @@ import { execSync, execFileSync } from "child_process";
 import { mkdirSync, readFileSync, existsSync, unlinkSync, createReadStream } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import Anthropic from "@anthropic-ai/sdk";
+import Anthropic, { toFile } from "@anthropic-ai/sdk";
 import { config } from "dotenv";
 
-config({ path: "C:/Users/RLabar/bobby-bd-dashboard/.env.local" });
+config({ path: "C:/Users/RLabar/bobby-bd-dashboard/.env.local", override: true });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ZIP = "C:/Users/RLabar/Downloads/Bob (1).zip";
@@ -111,7 +111,7 @@ for (const zipPath of pdfPaths) {
         continue;
       }
       const file = await anthropic.beta.files.upload({
-        file: createReadStream(destPath),
+        file: await toFile(createReadStream(destPath), filename, { type: "application/pdf" }),
       });
       res = await fetch(`${RAILWAY_URL}/api/process-document`, {
         method: "POST",
