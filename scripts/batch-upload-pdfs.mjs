@@ -9,14 +9,22 @@
  */
 
 import { execSync, execFileSync } from "child_process";
-import { mkdirSync, readFileSync, existsSync, unlinkSync } from "fs";
+import { mkdirSync, readFileSync, existsSync, unlinkSync, createReadStream } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import Anthropic from "@anthropic-ai/sdk";
+import { config } from "dotenv";
+
+config({ path: "C:/Users/RLabar/bobby-bd-dashboard/.env.local" });
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ZIP = "C:/Users/RLabar/Downloads/Bob (1).zip";
 const EXTRACT_DIR = "C:/Users/RLabar/bobby-bd-dashboard/data/pdf-upload-staging";
 const RAILWAY_URL = process.env.RAILWAY_URL || "https://bobby-bd-dashboard-production.up.railway.app";
+
+const anthropic = process.env.ANTHROPIC_API_KEY
+  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  : null;
 
 const VALUABLE_PATTERNS = [
   /offering.memo/i, /_OM\.pdf$/i, /OfferingMem/i,
@@ -80,11 +88,13 @@ for (const zipPath of pdfPaths) {
     continue;
   }
 
-  // Upload: multipart for small files, JSON+base64 for large ones (>=8MB)
-  // because Next App Router formData() parser fails on big multipart bodies.
-  // Skip raw files >30MB — they exceed Anthropic's 32MB PDF cap (after base64 ≈ 40MB).
-  const RAW_MAX = 30 * 1024 * 1024;
-  const JSON_THRESHOLD = 8 * 1024 * 1024;
+  // Upload strategy by raw size:
+  //   ≤8MB  → multipart FormData to Railway (existing path)
+  //   >8MB and ≤32MB → upload to Anthropic Files API directly, send fileId
+  //                    to Railway (avoids Next/Railway body-size limits)
+  //   >32MB → skip (exceeds Anthropic PDF cap)
+  const RAW_MAX = 32 * 1024 * 1024;
+  const FILES_API_THRESHOLD = 8 * 1024 * 1024;
   try {
     const bytes = readFileSync(destPath);
     if (bytes.length > RAW_MAX) {
@@ -94,12 +104,19 @@ for (const zipPath of pdfPaths) {
     }
 
     let res;
-    if (bytes.length >= JSON_THRESHOLD) {
-      const base64 = bytes.toString("base64");
+    if (bytes.length >= FILES_API_THRESHOLD) {
+      if (!anthropic) {
+        console.error(`  ✗ ${filename}: ANTHROPIC_API_KEY missing for Files API`);
+        failed++;
+        continue;
+      }
+      const file = await anthropic.beta.files.upload({
+        file: createReadStream(destPath),
+      });
       res = await fetch(`${RAILWAY_URL}/api/process-document`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ filename, base64, fileSize: bytes.length }),
+        body: JSON.stringify({ filename, fileId: file.id, fileSize: bytes.length }),
       });
     } else {
       const blob = new Blob([bytes], { type: "application/pdf" });

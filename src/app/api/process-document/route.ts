@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { documents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { processDocument } from "@/lib/api/document-processor";
+import { processDocument, type DocumentSource } from "@/lib/api/document-processor";
 import { NextResponse } from "next/server";
 
 // Upload and process a document directly (without Box).
@@ -24,22 +24,24 @@ export async function POST(request: Request) {
     }
 
     // Two upload paths:
-    //   - multipart/form-data (browser uploads, Box watcher) → Next parses FormData
-    //   - application/json {filename, base64, fileSize?} (batch script for >10MB PDFs
-    //     that hit Next's multipart parser limits)
+    //   - multipart/form-data (browser, Box watcher) for files ≤10MB
+    //   - application/json {filename, fileId, fileSize?} for files >10MB.
+    //     The script uploads the PDF to Anthropic Files API directly and
+    //     passes only the file_id through Railway, bypassing Next's body
+    //     parser limits entirely.
     let filename: string;
-    let base64: string;
     let fileSize: number;
+    let source: DocumentSource;
 
     const contentType = request.headers.get("content-type") ?? "";
     if (contentType.includes("application/json")) {
-      const body = await request.json() as { filename?: string; base64?: string; fileSize?: number };
-      if (!body.filename || !body.base64) {
-        return NextResponse.json({ error: "Missing filename or base64" }, { status: 400 });
+      const body = await request.json() as { filename?: string; fileId?: string; fileSize?: number };
+      if (!body.filename || !body.fileId) {
+        return NextResponse.json({ error: "Missing filename or fileId" }, { status: 400 });
       }
       filename = body.filename;
-      base64 = body.base64;
-      fileSize = body.fileSize ?? Math.floor((body.base64.length * 3) / 4);
+      fileSize = body.fileSize ?? 0;
+      source = { kind: "fileId", fileId: body.fileId };
     } else {
       const formData = await request.formData();
       const file = formData.get("file") as File;
@@ -49,7 +51,7 @@ export async function POST(request: Request) {
       filename = file.name;
       fileSize = file.size;
       const buffer = await file.arrayBuffer();
-      base64 = Buffer.from(buffer).toString("base64");
+      source = { kind: "base64", data: Buffer.from(buffer).toString("base64") };
     }
 
     const fileType = filename.split(".").pop()?.toLowerCase() || "unknown";
@@ -85,7 +87,7 @@ export async function POST(request: Request) {
       doc = { ...existing, status: "pending" };
     }
 
-    await processDocument(doc.id, base64);
+    await processDocument(doc.id, source);
 
     // Fetch updated doc
     const updated = db.select().from(documents).where(

@@ -44,7 +44,15 @@ type ExtractedData = {
   keyHighlights: string[];
 };
 
-export async function processDocument(documentId: number, pdfBase64: string): Promise<void> {
+export type DocumentSource =
+  | { kind: "base64"; data: string }
+  | { kind: "fileId"; fileId: string };
+
+export async function processDocument(documentId: number, source: DocumentSource | string): Promise<void> {
+  // Back-compat: a bare string is treated as base64.
+  const src: DocumentSource =
+    typeof source === "string" ? { kind: "base64", data: source } : source;
+
   // Mark as processing
   db.update(documents)
     .set({ status: "processing" })
@@ -54,17 +62,24 @@ export async function processDocument(documentId: number, pdfBase64: string): Pr
   try {
     const anthropic = getClient();
 
-    const response = await anthropic.messages.create({
+    const documentBlock =
+      src.kind === "base64"
+        ? { type: "document" as const, source: { type: "base64" as const, media_type: "application/pdf" as const, data: src.data } }
+        : { type: "document" as const, source: { type: "file" as const, file_id: src.fileId } };
+
+    // Stream the response. Anthropic SDK requires streaming once max_tokens
+    // implies an estimated runtime > 10 min, AND non-streaming responses get
+    // truncated past ~10MB at the transport layer.
+    // Use beta.messages so we can pass betas: ["files-api-..."] when needed.
+    const stream = anthropic.beta.messages.stream({
       model: "claude-sonnet-4-6",
       max_tokens: 32000,
+      ...(src.kind === "fileId" ? { betas: ["files-api-2025-04-14"] as const } : {}),
       messages: [
         {
           role: "user",
           content: [
-            {
-              type: "document",
-              source: { type: "base64", media_type: "application/pdf", data: pdfBase64 },
-            },
+            documentBlock,
             {
               type: "text",
               text: `You are an expert commercial real estate analyst. Extract ALL available data from this document.
@@ -113,7 +128,8 @@ CRITICAL INSTRUCTIONS:
       ],
     });
 
-    const text = response.content[0].type === "text" ? response.content[0].text : "";
+    const finalMessage = await stream.finalMessage();
+    const text = finalMessage.content[0].type === "text" ? finalMessage.content[0].text : "";
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("Failed to parse Claude response as JSON");
 
