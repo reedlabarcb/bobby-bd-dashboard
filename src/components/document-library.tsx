@@ -134,11 +134,14 @@ function StatusBadge({ status }: { status: string | null }) {
 export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const reprocessRef = useRef<HTMLInputElement>(null);
+  const [reprocessDocId, setReprocessDocId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [propTypeFilter, setPropTypeFilter] = useState("all");
   const [uploading, setUploading] = useState(false);
+  const [reprocessingId, setReprocessingId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [boxStatus, setBoxStatus] = useState<
     "unknown" | "checking" | "connected" | "disconnected" | "no_credentials"
@@ -166,6 +169,31 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
       }
     } catch {
       setBoxStatus("no_credentials");
+    }
+  }
+
+  // --- Reprocess ---
+  async function handleReprocess(file: File, docId: number) {
+    setReprocessingId(docId);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/process-document", {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Reprocess failed" }));
+        throw new Error(err.error || "Reprocess failed");
+      }
+      toast.success("Document reprocessed successfully");
+      router.refresh();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Reprocess failed";
+      toast.error(msg);
+    } finally {
+      setReprocessingId(null);
+      setReprocessDocId(null);
     }
   }
 
@@ -344,6 +372,19 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
               Sync Box Folder
             </Button>
           )}
+
+          {/* Reprocess file input (hidden) */}
+          <input
+            ref={reprocessRef}
+            type="file"
+            accept=".pdf"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file && reprocessDocId != null) handleReprocess(file, reprocessDocId);
+              e.target.value = "";
+            }}
+          />
 
           {/* Upload */}
           <input
@@ -781,12 +822,28 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
                         </div>
                       )}
 
-                      {/* Error message */}
-                      {doc.status === "error" && doc.errorMessage && (
-                        <div className="rounded-md bg-red-500/10 border border-red-500/20 p-3">
+                      {/* Error message + reprocess */}
+                      {doc.status === "error" && (
+                        <div className="rounded-md bg-red-500/10 border border-red-500/20 p-3 flex items-start justify-between gap-3">
                           <p className="text-xs font-medium text-red-400">
-                            Error: {doc.errorMessage}
+                            {doc.errorMessage ? `Error: ${doc.errorMessage}` : "Processing failed"}
                           </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="shrink-0 text-xs h-7 border-red-500/30 hover:border-red-400/50"
+                            disabled={reprocessingId === doc.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setReprocessDocId(doc.id);
+                              reprocessRef.current?.click();
+                            }}
+                          >
+                            {reprocessingId === doc.id ? (
+                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                            ) : null}
+                            Reprocess
+                          </Button>
                         </div>
                       )}
                     </div>

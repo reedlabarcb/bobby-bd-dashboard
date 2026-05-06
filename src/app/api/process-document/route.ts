@@ -34,13 +34,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Only PDF files are currently supported" }, { status: 400 });
     }
 
-    // Create document record
-    const doc = db.insert(documents).values({
-      filename: file.name,
-      fileType,
-      fileSize: file.size,
-      status: "pending",
-    }).returning().get();
+    // Reuse existing error/pending record for the same filename if present
+    const existing = db.select().from(documents)
+      .where(eq(documents.filename, file.name))
+      .get();
+
+    let doc: typeof existing;
+    if (existing && existing.status !== "done") {
+      db.update(documents)
+        .set({ status: "pending", errorMessage: null, fileSize: file.size })
+        .where(eq(documents.id, existing.id))
+        .run();
+      doc = { ...existing, status: "pending" };
+    } else if (!existing) {
+      doc = db.insert(documents).values({
+        filename: file.name,
+        fileType,
+        fileSize: file.size,
+        status: "pending",
+      }).returning().get();
+    } else {
+      // already done — still reprocess (explicit reprocess action)
+      db.update(documents)
+        .set({ status: "pending", errorMessage: null })
+        .where(eq(documents.id, existing.id))
+        .run();
+      doc = { ...existing, status: "pending" };
+    }
 
     // Process
     const buffer = await file.arrayBuffer();

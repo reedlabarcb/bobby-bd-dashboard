@@ -26,7 +26,7 @@ export async function parseOfferingMemorandum(pdfBase64: string): Promise<{
   const anthropic = getClient();
 
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 2000,
     messages: [
       {
@@ -70,7 +70,7 @@ export async function synthesizeContactInfo(
   const anthropic = getClient();
 
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 1500,
     messages: [
       {
