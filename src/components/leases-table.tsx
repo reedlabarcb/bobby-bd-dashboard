@@ -228,17 +228,20 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
     const minS = minSF ? parseInt(minSF) : null;
     const maxS = maxSF ? parseInt(maxSF) : null;
 
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
     const list = leases.filter((l) => {
-      // Tab / time horizon — only future expirations (already-expired leases
-      // live on the "All" tab). Months-remaining is negative when past.
+      // Tab / time horizon — compare actual end date to a calendar cutoff so
+      // "6 months" means on or before the same day 6 months from today, not
+      // just integer month subtraction (which rounds Nov 29 down to 6).
       if (tab !== "all") {
-        const horizon = parseInt(tab);
-        if (
-          l.monthsRemaining == null ||
-          l.monthsRemaining < 0 ||
-          l.monthsRemaining > horizon
-        )
-          return false;
+        if (!l.leaseEndDate) return false;
+        const end = new Date(l.leaseEndDate + "T00:00:00");
+        if (isNaN(end.getTime()) || end < now) return false;
+        const cutoff = new Date(now);
+        cutoff.setMonth(cutoff.getMonth() + parseInt(tab));
+        if (end > cutoff) return false;
       }
 
       // Search
@@ -353,19 +356,20 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
   // counts only future expirations — expired leases show up in Total but not in
   // the urgency buckets.
   const stats = useMemo(() => {
-    let in6 = 0,
-      in12 = 0,
-      in24 = 0,
-      expired = 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const cut6 = new Date(today); cut6.setMonth(cut6.getMonth() + 6);
+    const cut12 = new Date(today); cut12.setMonth(cut12.getMonth() + 12);
+    const cut24 = new Date(today); cut24.setMonth(cut24.getMonth() + 24);
+    let in6 = 0, in12 = 0, in24 = 0, expired = 0;
     for (const l of leases) {
-      if (l.monthsRemaining == null) continue;
-      if (l.monthsRemaining < 0) {
-        expired++;
-        continue;
-      }
-      if (l.monthsRemaining <= 6) in6++;
-      if (l.monthsRemaining <= 12) in12++;
-      if (l.monthsRemaining <= 24) in24++;
+      if (!l.leaseEndDate) continue;
+      const end = new Date(l.leaseEndDate + "T00:00:00");
+      if (isNaN(end.getTime())) continue;
+      if (end < today) { expired++; continue; }
+      if (end <= cut6) in6++;
+      if (end <= cut12) in12++;
+      if (end <= cut24) in24++;
     }
     return { in6, in12, in24, expired, total: leases.length };
   }, [leases]);
