@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { jsonrepair } from "jsonrepair";
 import { db } from "@/lib/db";
 import { documents, tenants, leases, deals } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -55,7 +56,7 @@ export async function processDocument(documentId: number, pdfBase64: string): Pr
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 4000,
+      max_tokens: 32000,
       messages: [
         {
           role: "user",
@@ -116,7 +117,19 @@ CRITICAL INSTRUCTIONS:
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("Failed to parse Claude response as JSON");
 
-    const extracted: ExtractedData = JSON.parse(jsonMatch[0]);
+    let extracted: ExtractedData;
+    let parsedWithRepair = false;
+    try {
+      extracted = JSON.parse(jsonMatch[0]);
+    } catch {
+      const repaired = jsonrepair(jsonMatch[0]);
+      extracted = JSON.parse(repaired);
+      parsedWithRepair = true;
+      console.log(
+        `[document-processor] doc ${documentId} JSON repaired (raw=${text.length} chars, json=${jsonMatch[0].length} chars)`
+      );
+    }
+    (extracted as ExtractedData & { parsedWithRepair?: boolean }).parsedWithRepair = parsedWithRepair;
 
     // Compute months remaining for each lease
     const now = new Date();
