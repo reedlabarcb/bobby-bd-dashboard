@@ -70,7 +70,20 @@ export default async function LeasesPage() {
     }
   }
 
+  const now = new Date();
+
   const enriched = allLeases.map((l) => {
+    // Recompute from leaseEndDate so the value stays accurate over time
+    let monthsRemaining: number | null = null;
+    if (l.leaseEndDate) {
+      const end = new Date(l.leaseEndDate);
+      if (!isNaN(end.getTime())) {
+        monthsRemaining =
+          (end.getFullYear() - now.getFullYear()) * 12 +
+          (end.getMonth() - now.getMonth());
+      }
+    }
+
     const tenantKey = l.tenantName.trim().toLowerCase();
     const tenantContacts = (contactsByCompanyKey.get(tenantKey) ?? []).map((c) => ({
       id: c.id,
@@ -86,7 +99,7 @@ export default async function LeasesPage() {
           return c ? { id: c.id, name: c.name } : null;
         })()
       : null;
-    return { ...l, tenantContacts, landlordContact };
+    return { ...l, monthsRemaining, tenantContacts, landlordContact };
   });
 
   return <LeasesTable leases={enriched} />;
