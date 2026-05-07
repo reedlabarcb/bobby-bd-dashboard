@@ -1,11 +1,25 @@
+/**
+ * POST /api/find-contacts-for-company
+ *
+ * Cheap people-discovery for a company. Runs only the no-AI sources by
+ * default; Claude web_search fires ONLY when both Hunter and PDL return
+ * zero candidates.
+ *
+ * Sources, in order:
+ *   1. Hunter domain-search
+ *   2. PDL searchPeopleAtCompany
+ *   3. Claude web_search  ← last resort, only if 1 + 2 returned 0
+ *
+ * Apollo is intentionally NOT used here (free-tier 403s; per memory).
+ *
+ * Returns candidates only — does NOT write to the DB. Caller is the
+ * leases-page inline panel which lets the user check rows and decide
+ * whether to add or run a deeper search next.
+ */
+
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { domainSearch } from "@/lib/api/hunter";
-import {
-  searchOrganization as apolloSearchOrg,
-  searchPeople as apolloSearchPeople,
-  ApolloFreeTierError,
-} from "@/lib/api/apollo";
 import { searchPeopleAtCompany as pdlSearchPeople } from "@/lib/api/pdl";
 
 export type CandidateContact = {
@@ -14,21 +28,9 @@ export type CandidateContact = {
   email: string | null;
   phone: string | null;
   linkedinUrl: string | null;
-  source: "hunter" | "apollo" | "pdl" | "web_search";
+  source: "hunter" | "pdl" | "web_search";
   confidence: number; // 0-100
 };
-
-const SENIOR_KEYWORDS = [
-  "ceo", "president", "founder", "owner", "principal", "managing",
-  "director", "vp", "vice president", "head of", "chief", "partner",
-  "real estate", "leasing", "facilit", "operations", "asset",
-];
-
-function isSenior(title: string | null | undefined): boolean {
-  if (!title) return false;
-  const t = title.toLowerCase();
-  return SENIOR_KEYWORDS.some((k) => t.includes(k));
-}
 
 function dedupeKey(c: { name: string; email: string | null }): string {
   if (c.email) return `email:${c.email.toLowerCase()}`;
@@ -37,7 +39,7 @@ function dedupeKey(c: { name: string; email: string | null }): string {
 
 export async function POST(request: Request) {
   try {
-    const { company, domain: domainHint, city, state, industry } = await request.json() as {
+    const { company, domain: domainHint, city, state, industry } = (await request.json()) as {
       company?: string;
       domain?: string;
       city?: string;
@@ -53,7 +55,7 @@ export async function POST(request: Request) {
     const notFound: string[] = [];
     let resolvedDomain: string | null = domainHint ?? null;
 
-    // ─── Step 1: Hunter domain-search ────────────────────────────
+    // ─── 1. Hunter domain-search ───────────────────────────────
     if (process.env.HUNTER_API_KEY) {
       try {
         const ds = await domainSearch(
@@ -66,10 +68,10 @@ export async function POST(request: Request) {
           if (!name) continue;
           candidates.push({
             name,
-            title: e.position,
+            title: e.position ?? null,
             email: e.value,
-            phone: e.phone_number,
-            linkedinUrl: e.linkedin,
+            phone: e.phone_number ?? null,
+            linkedinUrl: e.linkedin ?? null,
             source: "hunter",
             confidence: e.confidence ?? 0,
           });
@@ -84,53 +86,7 @@ export async function POST(request: Request) {
       notFound.push("Hunter not configured");
     }
 
-    // ─── Step 2: Apollo org-search (get domain) → people-search ──
-    if (process.env.APOLLO_API_KEY) {
-      try {
-        if (!resolvedDomain) {
-          const org = await apolloSearchOrg(company);
-          if (org?.domain) resolvedDomain = org.domain;
-        }
-      } catch (err) {
-        if (!(err instanceof ApolloFreeTierError)) {
-          errors.push(`Apollo org-search: ${err instanceof Error ? err.message : "failed"}`);
-        }
-      }
-      try {
-        const people = await apolloSearchPeople({ company });
-        const list = (people.people as Array<Record<string, unknown>> | undefined) ?? [];
-        for (const p of list) {
-          const name =
-            (p.name as string | undefined) ??
-            [p.first_name, p.last_name].filter(Boolean).join(" ").trim();
-          if (!name) continue;
-          const key = dedupeKey({ name, email: (p.email as string | undefined) ?? null });
-          if (candidates.some((c) => dedupeKey(c) === key)) continue;
-          candidates.push({
-            name,
-            title: (p.title as string | undefined) ?? null,
-            email: (p.email as string | undefined) ?? null,
-            phone: (p.organization_phone as string | undefined) ?? null,
-            linkedinUrl: (p.linkedin_url as string | undefined) ?? null,
-            source: "apollo",
-            confidence: 60,
-          });
-        }
-        if (list.length === 0) {
-          notFound.push(`Apollo: no people found at "${company}"`);
-        }
-      } catch (err) {
-        if (err instanceof ApolloFreeTierError) {
-          notFound.push("Apollo free tier limited (skipping people-search)");
-        } else {
-          errors.push(`Apollo: ${err instanceof Error ? err.message : "failed"}`);
-        }
-      }
-    } else {
-      notFound.push("Apollo not configured");
-    }
-
-    // ─── Step 3: PDL searchPeopleAtCompany ───────────────────────
+    // ─── 2. PDL searchPeopleAtCompany ──────────────────────────
     if (process.env.PDL_API_KEY) {
       try {
         const pdlPeople = await pdlSearchPeople(company);
@@ -158,13 +114,16 @@ export async function POST(request: Request) {
       notFound.push("PDL not configured");
     }
 
-    // ─── Step 4: Claude + web_search fallback ────────────────────
-    const seniorCount = candidates.filter((c) => isSenior(c.title)).length;
-    if (seniorCount < 3 && process.env.ANTHROPIC_API_KEY) {
+    // ─── 3. Claude web_search — LAST RESORT ─────────────────────
+    // Only fires if BOTH Hunter and PDL produced zero candidates. This
+    // is the cheap-default contract: no Claude credits burned just to
+    // surface people who were already in Hunter's index.
+    let webSearchUsed = false;
+    if (candidates.length === 0 && process.env.ANTHROPIC_API_KEY) {
       try {
         const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
         const locationHint = [city, state].filter(Boolean).join(", ");
-        const prompt = `Find 3-5 senior decision-makers at "${company}"${locationHint ? ` (${locationHint})` : ""}${industry ? ` in the ${industry} industry` : ""}. We are a commercial real estate broker looking to discuss their lease/space needs. Prioritize: CEO, President, COO, Director of Real Estate, VP of Operations, Head of Facilities, founders, owners.
+        const prompt = `Find 3-5 senior decision-makers at "${company}"${locationHint ? ` (${locationHint})` : ""}${industry ? ` in the ${industry} industry` : ""}. We are a commercial real estate broker. Prioritize: CEO, President, COO, Director of Real Estate, VP of Operations, Head of Facilities, founders, owners.
 
 Use web search. For each person return: full name, current title, LinkedIn profile URL if findable, the company they work for (to confirm).
 
@@ -181,6 +140,7 @@ Return ONLY valid JSON, no preamble:
           tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 } as never],
           messages: [{ role: "user", content: prompt }],
         });
+        webSearchUsed = true;
 
         const textBlocks = response.content.filter((b) => b.type === "text") as Array<{ type: "text"; text: string }>;
         const text = textBlocks.map((b) => b.text).join("\n");
@@ -204,15 +164,20 @@ Return ONLY valid JSON, no preamble:
           }
         }
       } catch (err) {
-        errors.push(`Claude web_search: ${err instanceof Error ? err.message : "failed"}`);
+        const msg = err instanceof Error ? err.message : "failed";
+        if (msg.includes("400") || msg.includes("credit_balance") || msg.includes("balance")) {
+          notFound.push("AI search unavailable — top up credits at console.anthropic.com");
+        } else {
+          errors.push(`Claude web_search: ${msg}`);
+        }
       }
     }
 
-    // Sort: senior titles first, then by confidence desc, then name.
+    // Sort: confirmed-email first, then by confidence, then name
     candidates.sort((a, b) => {
-      const sa = isSenior(a.title) ? 1 : 0;
-      const sb = isSenior(b.title) ? 1 : 0;
-      if (sa !== sb) return sb - sa;
+      const aHas = a.email ? 1 : 0;
+      const bHas = b.email ? 1 : 0;
+      if (aHas !== bHas) return bHas - aHas;
       if (a.confidence !== b.confidence) return b.confidence - a.confidence;
       return a.name.localeCompare(b.name);
     });
@@ -221,9 +186,9 @@ Return ONLY valid JSON, no preamble:
       company,
       domain: resolvedDomain,
       candidates: candidates.slice(0, 25),
+      webSearchUsed,
       counts: {
         hunter: candidates.filter((c) => c.source === "hunter").length,
-        apollo: candidates.filter((c) => c.source === "apollo").length,
         pdl: candidates.filter((c) => c.source === "pdl").length,
         web_search: candidates.filter((c) => c.source === "web_search").length,
       },

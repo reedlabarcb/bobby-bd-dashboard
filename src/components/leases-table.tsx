@@ -21,8 +21,7 @@ import {
 import { GenericEditDialog } from "@/components/generic-edit-dialog";
 
 import { Button } from "@/components/ui/button";
-import { FindContactsButton } from "@/components/find-contacts-button";
-import { DeepSearchCompanyButton } from "@/components/deep-search-company-button";
+import { FindPeopleInlinePanel } from "@/components/find-people-inline-panel";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -856,6 +855,7 @@ function LeaseRowGroup({
   isAddingContact: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  const [findPeopleOpen, setFindPeopleOpen] = useState(false);
   return (
     <>
       <TableRow
@@ -1027,29 +1027,35 @@ function LeaseRowGroup({
                     </p>
                     {l.tenantContacts.length === 0 ? (
                       <div
-                        className="flex items-center gap-2 flex-wrap"
+                        className="space-y-2"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <FindContactsButton
-                          company={l.tenantName}
-                          city={l.propertyCity ?? undefined}
-                          state={l.propertyState ?? undefined}
-                          size="sm"
-                          variant="outline"
-                          label="Find People"
-                        />
-                        <DeepSearchCompanyButton
-                          company={l.tenantName}
-                          size="sm"
-                          variant="outline"
-                          label="Deep Search"
-                        />
-                        <a
-                          href={`/contacts?view=company&search=${encodeURIComponent(l.tenantName)}`}
-                          className="text-xs text-blue-600 hover:text-blue-500"
-                        >
-                          add manually →
-                        </a>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            onClick={() => setFindPeopleOpen((v) => !v)}
+                          >
+                            <Search className="size-3.5" />
+                            {findPeopleOpen ? "Hide" : "Find People"}
+                          </Button>
+                          <a
+                            href={`/contacts?view=company&search=${encodeURIComponent(l.tenantName)}`}
+                            className="text-xs text-blue-600 hover:text-blue-500"
+                          >
+                            add manually →
+                          </a>
+                        </div>
+                        {findPeopleOpen && (
+                          <FindPeopleInlinePanel
+                            company={l.tenantName}
+                            city={l.propertyCity ?? undefined}
+                            state={l.propertyState ?? undefined}
+                            leaseId={l.id}
+                            onClose={() => setFindPeopleOpen(false)}
+                          />
+                        )}
                       </div>
                     ) : (
                       <div className="space-y-1">
