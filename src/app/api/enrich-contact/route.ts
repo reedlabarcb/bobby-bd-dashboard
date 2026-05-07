@@ -44,6 +44,7 @@ export async function POST(request: Request) {
 
     const enrichmentResults: Record<string, unknown>[] = [];
     const errors: string[] = [];
+    const notFound: string[] = []; // expected misses (no data found), not failures
 
     // LinkedIn URLs from the prospecting-sheet importer land in `notes`. Pull
     // it out as the strongest signal we have — it's a person-specific URL that
@@ -93,14 +94,14 @@ export async function POST(request: Request) {
           saveEnrichment(contactId, "hunter-domain", hunterDomainHit);
           enrichmentResults.push({ source: "hunter-domain", data: hunterDomainHit });
         } else if (ds.emails.length === 0) {
-          // No coverage for this company at all. Surface it so the UI shows it.
-          errors.push(
-            `Hunter: no emails crawled for ${ds.organization || contact.company}${ds.domain ? ` (${ds.domain})` : ""}`,
+          // No data in Hunter's index for this domain — common for smaller
+          // private companies. Not an error, just a miss.
+          notFound.push(
+            `Hunter has no email index for ${ds.organization || contact.company}${ds.domain ? ` (${ds.domain})` : ""}`,
           );
         } else {
-          // Hunter has the company but couldn't match the name.
-          errors.push(
-            `Hunter: ${ds.emails.length} emails at ${ds.organization || contact.company} but no match for "${contact.name}"`,
+          notFound.push(
+            `Hunter has ${ds.emails.length} emails at ${ds.organization || contact.company} but none match "${contact.name}"`,
           );
         }
       } catch (e) {
@@ -145,7 +146,13 @@ export async function POST(request: Request) {
         saveEnrichment(contactId, "apollo", apolloData);
         enrichmentResults.push({ source: "apollo", data: apolloData });
       } catch (e) {
-        errors.push(`Apollo: ${e instanceof Error ? e.message : "failed"}`);
+        const msg = e instanceof Error ? e.message : "failed";
+        // Apollo free-tier search returns 403 — known limitation, not a bug.
+        if (msg.includes("403")) {
+          notFound.push("Apollo people-search requires paid tier (free-tier returns 403)");
+        } else {
+          errors.push(`Apollo: ${msg}`);
+        }
       }
     }
 
@@ -240,9 +247,15 @@ export async function POST(request: Request) {
       }
     }
     if (summary) {
+      // Strip any existing "AI Summary:" block (and the separator above it)
+      // before appending the new one — re-enriching shouldn't pile up
+      // duplicate summaries in the notes field.
+      const baseNotes = (contact.notes || "")
+        .replace(/\s*(?:\n?---\n)?\s*AI Summary:[\s\S]*$/, "")
+        .trimEnd();
       diff.notes = {
         old: contact.notes || null,
-        new: contact.notes ? `${contact.notes}\n\n---\nAI Summary: ${summary}` : `AI Summary: ${summary}`,
+        new: baseNotes ? `${baseNotes}\n\n---\nAI Summary: ${summary}` : `AI Summary: ${summary}`,
       };
     }
 
@@ -262,7 +275,7 @@ export async function POST(request: Request) {
       applied = true;
     }
 
-    return NextResponse.json({ diff, applied, errors, enrichmentCount: enrichmentResults.length });
+    return NextResponse.json({ diff, applied, errors, notFound, enrichmentCount: enrichmentResults.length });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Enrichment failed" },

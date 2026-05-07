@@ -22,12 +22,14 @@ export function EnrichButton({ contactId }: { contactId: number }) {
   const [loading, setLoading] = useState(false);
   const [diff, setDiff] = useState<Record<string, DiffEntry> | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
+  const [notFound, setNotFound] = useState<string[]>([]);
   const [applying, setApplying] = useState(false);
 
   async function handleEnrich() {
     setLoading(true);
     setDiff(null);
     setErrors([]);
+    setNotFound([]);
     try {
       const res = await fetch("/api/enrich-contact", {
         method: "POST",
@@ -41,6 +43,9 @@ export function EnrichButton({ contactId }: { contactId: number }) {
       const data = await res.json();
       if (data.errors?.length) {
         setErrors(data.errors);
+      }
+      if (data.notFound?.length) {
+        setNotFound(data.notFound);
       }
       if (data.diff && Object.keys(data.diff).length > 0) {
         setDiff(data.diff);
@@ -121,9 +126,17 @@ export function EnrichButton({ contactId }: { contactId: number }) {
           </DialogHeader>
           {errors.length > 0 && (
             <div className="rounded-md bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-400 space-y-1">
-              <p className="font-medium">Warnings:</p>
+              <p className="font-medium">Errors:</p>
               {errors.map((err, i) => (
                 <p key={i}>{err}</p>
+              ))}
+            </div>
+          )}
+          {notFound.length > 0 && (
+            <div className="rounded-md bg-muted/30 border border-border/50 p-3 text-xs text-muted-foreground space-y-1">
+              <p className="font-medium">No data found from:</p>
+              {notFound.map((n, i) => (
+                <p key={i}>· {n}</p>
               ))}
             </div>
           )}
