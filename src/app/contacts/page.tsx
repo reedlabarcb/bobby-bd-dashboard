@@ -15,9 +15,10 @@ export default async function ContactsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const sp = await searchParams;
-  // Default view is now flat/people-first. Tenant rollups already live on
-  // /buildings and /leases; the contacts page should be about the people.
-  const view = (Array.isArray(sp.view) ? sp.view[0] : sp.view) || "flat";
+  // Default view is company — companies as the primary index, click a
+  // company name to expand into the people there. Use ?view=flat to
+  // get the people-first table.
+  const view = (Array.isArray(sp.view) ? sp.view[0] : sp.view) || "company";
   const isFlat = view === "flat";
 
   // People-only: exclude landlord-typed rows and rows whose `name` is clearly

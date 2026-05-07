@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Search, Loader2, Plus, Check, ExternalLink } from "lucide-react";
+import { Search, Loader2, Plus, Check, ExternalLink, Telescope, ShieldCheck, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -73,6 +73,23 @@ export function FindContactsButton({
   const [notFound, setNotFound] = useState<string[]>([]);
   const [adding, setAdding] = useState<string | null>(null);
   const [added, setAdded] = useState<Set<string>>(new Set());
+  // Per-candidate deep-research state. `deepLoading` tracks which row is
+  // currently running the deep search; `deepResults` holds the enriched
+  // payload keyed by candidate row key.
+  type DeepResult = {
+    title: string | null;
+    email: string | null;
+    emailConfidence: "verified" | "found-unverified" | "none";
+    predictedEmail: string | null;
+    predictedEmailConfidence: "high — pattern + verified" | "medium — pattern unverified" | null;
+    phone: string | null;
+    linkedinUrl: string | null;
+    city: string | null;
+    state: string | null;
+    summary: string;
+  };
+  const [deepLoading, setDeepLoading] = useState<string | null>(null);
+  const [deepResults, setDeepResults] = useState<Record<string, DeepResult>>({});
 
   async function run() {
     setLoading(true);
@@ -105,8 +122,47 @@ export function FindContactsButton({
     }
   }
 
+  async function deepResearch(c: Candidate) {
+    const key = c.email ?? c.name;
+    setDeepLoading(key);
+    try {
+      const res = await fetch("/api/deep-search-person", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: c.name, company }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Deep research failed");
+      setDeepResults((prev) => ({ ...prev, [key]: data }));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Deep research failed");
+    } finally {
+      setDeepLoading(null);
+    }
+  }
+
   async function addCandidate(c: Candidate) {
     const key = c.email ?? c.name;
+    const enriched = deepResults[key];
+    // Asterisk: prefer enriched fields when present, fall back to original
+    const asStr = (v: unknown) =>
+      typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
+    const email = asStr(enriched?.email) ?? asStr(c.email);
+    const phone = asStr(enriched?.phone) ?? asStr(c.phone);
+    const title = asStr(enriched?.title) ?? asStr(c.title);
+    const linkedinUrl = asStr(enriched?.linkedinUrl) ?? asStr(c.linkedinUrl);
+    const city = asStr(enriched?.city);
+    const state = asStr(enriched?.state);
+
+    const noteParts: string[] = [];
+    if (linkedinUrl) noteParts.push(`LinkedIn: ${linkedinUrl}`);
+    if (enriched?.predictedEmail && !email) {
+      noteParts.push(
+        `Predicted email: ${enriched.predictedEmail} (${enriched.predictedEmailConfidence ?? "unverified"})`,
+      );
+    }
+    if (enriched?.summary) noteParts.push(`---\nDeep Search Summary: ${enriched.summary}`);
+
     setAdding(key);
     try {
       const res = await fetch("/api/contacts", {
@@ -114,13 +170,15 @@ export function FindContactsButton({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: c.name,
-          email: c.email,
-          phone: c.phone,
+          email,
+          phone,
           company,
-          title: c.title,
+          title,
+          city,
+          state,
           type: "tenant",
-          source: `find-contacts/${c.source}`,
-          notes: c.linkedinUrl ? `LinkedIn: ${c.linkedinUrl}` : undefined,
+          source: enriched ? `find-contacts/${c.source}+deep` : `find-contacts/${c.source}`,
+          notes: noteParts.length > 0 ? noteParts.join("\n") : undefined,
         }),
       });
       if (!res.ok) throw new Error("Failed to create contact");
@@ -204,58 +262,114 @@ export function FindContactsButton({
                 const key = c.email ?? c.name;
                 const isAdded = added.has(key);
                 const isAdding = adding === key;
+                const isDeepLoading = deepLoading === key;
+                const enriched = deepResults[key];
+                // Display fields prefer enriched values when present
+                const dispEmail = enriched?.email ?? c.email;
+                const dispPhone = enriched?.phone ?? c.phone;
+                const dispTitle = enriched?.title ?? c.title;
+                const dispLinkedIn = enriched?.linkedinUrl ?? c.linkedinUrl;
                 return (
                   <div
                     key={key}
-                    className="flex items-start justify-between gap-3 p-3 rounded-md border border-border hover:bg-muted/40"
+                    className="rounded-md border border-border hover:bg-muted/40"
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium">{c.name}</span>
-                        <Badge
-                          className={`text-[10px] uppercase tracking-wider ${SOURCE_COLORS[c.source]}`}
-                          variant="outline"
-                        >
-                          {SOURCE_LABELS[c.source]}
-                        </Badge>
-                        {c.confidence > 0 && (
-                          <span className="text-[10px] text-muted-foreground">
-                            {c.confidence}% conf
-                          </span>
-                        )}
-                      </div>
-                      {c.title && (
-                        <p className="text-xs text-muted-foreground mt-0.5">{c.title}</p>
-                      )}
-                      <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs mt-1">
-                        {c.email && <span className="text-blue-700">{c.email}</span>}
-                        {c.phone && <span className="text-slate-700">{c.phone}</span>}
-                        {c.linkedinUrl && (
-                          <a
-                            href={c.linkedinUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-700 hover:underline inline-flex items-center gap-1"
+                    <div className="flex items-start justify-between gap-3 p-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{c.name}</span>
+                          <Badge
+                            className={`text-[10px] uppercase tracking-wider ${SOURCE_COLORS[c.source]}`}
+                            variant="outline"
                           >
-                            LinkedIn <ExternalLink className="size-3" />
-                          </a>
+                            {SOURCE_LABELS[c.source]}
+                          </Badge>
+                          {c.confidence > 0 && (
+                            <span className="text-[10px] text-muted-foreground">
+                              {c.confidence}% conf
+                            </span>
+                          )}
+                          {enriched && (
+                            <Badge variant="outline" className="text-[10px] bg-purple-100 text-purple-700 border-purple-200">
+                              <Telescope className="size-3 mr-1" />
+                              Deep enriched
+                            </Badge>
+                          )}
+                        </div>
+                        {dispTitle && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{dispTitle}</p>
                         )}
+                        <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs mt-1">
+                          {dispEmail && (
+                            <span className="text-blue-700 inline-flex items-center gap-1">
+                              {dispEmail}
+                              {enriched?.emailConfidence === "verified" && (
+                                <ShieldCheck className="size-3 text-emerald-600" />
+                              )}
+                            </span>
+                          )}
+                          {!dispEmail && enriched?.predictedEmail && (
+                            <span className="text-amber-700 inline-flex items-center gap-1">
+                              {enriched.predictedEmail}
+                              <Badge variant="outline" className="text-[9px] bg-amber-100 text-amber-800 border-amber-200">
+                                <AlertTriangle className="size-2.5 mr-0.5" />
+                                {enriched.predictedEmailConfidence?.startsWith("high") ? "predicted ✓" : "predicted"}
+                              </Badge>
+                            </span>
+                          )}
+                          {dispPhone && <span className="text-slate-700">{dispPhone}</span>}
+                          {dispLinkedIn && (
+                            <a
+                              href={dispLinkedIn}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-700 hover:underline inline-flex items-center gap-1"
+                            >
+                              LinkedIn <ExternalLink className="size-3" />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1.5 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={isDeepLoading || isAdded}
+                          onClick={() => deepResearch(c)}
+                          className="gap-1"
+                        >
+                          {isDeepLoading ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Telescope className="size-3.5" />
+                          )}
+                          {enriched ? "Re-research" : "Deep Research"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={isAdded ? "ghost" : "default"}
+                          disabled={isAdded || isAdding}
+                          onClick={() => addCandidate(c)}
+                        >
+                          {isAdded ? (
+                            <><Check className="size-3.5 mr-1" /> Added</>
+                          ) : isAdding ? (
+                            <Loader2 className="size-3.5 mr-1 animate-spin" />
+                          ) : (
+                            <><Plus className="size-3.5 mr-1" /> Add</>
+                          )}
+                        </Button>
                       </div>
                     </div>
-                    <Button
-                      size="sm"
-                      variant={isAdded ? "ghost" : "default"}
-                      disabled={isAdded || isAdding}
-                      onClick={() => addCandidate(c)}
-                    >
-                      {isAdded ? (
-                        <><Check className="size-3.5 mr-1" /> Added</>
-                      ) : isAdding ? (
-                        <Loader2 className="size-3.5 mr-1 animate-spin" />
-                      ) : (
-                        <><Plus className="size-3.5 mr-1" /> Add</>
-                      )}
-                    </Button>
+                    {/* Inline enriched panel — appears under the row when Deep Research finishes */}
+                    {enriched?.summary && (
+                      <div className="border-t border-border/60 p-3 bg-purple-50/40 text-xs space-y-1">
+                        <p className="text-muted-foreground"><span className="font-medium text-foreground">Summary:</span> {enriched.summary}</p>
+                        {(enriched.city || enriched.state) && (
+                          <p className="text-muted-foreground">Location: {[enriched.city, enriched.state].filter(Boolean).join(", ")}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
