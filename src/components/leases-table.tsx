@@ -20,6 +20,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { FindContactsButton } from "@/components/find-contacts-button";
+import { DeepSearchCompanyButton } from "@/components/deep-search-company-button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -991,6 +992,12 @@ function LeaseRowGroup({
                           size="sm"
                           variant="outline"
                           label="Find People"
+                        />
+                        <DeepSearchCompanyButton
+                          company={l.tenantName}
+                          size="sm"
+                          variant="outline"
+                          label="Deep Search"
                         />
                         <a
                           href={`/contacts?view=company&search=${encodeURIComponent(l.tenantName)}`}

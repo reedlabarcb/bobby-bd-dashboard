@@ -16,6 +16,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { FindContactsButton } from "@/components/find-contacts-button";
+import { DeepSearchBulkButton } from "@/components/deep-search-bulk-button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -99,6 +100,25 @@ export function ContactsTable({
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  function toggleSelect(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function selectAllVisible(ids: number[]) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const allSelected = ids.every((id) => next.has(id));
+      if (allSelected) ids.forEach((id) => next.delete(id));
+      else ids.forEach((id) => next.add(id));
+      return next;
+    });
+  }
 
   // Unique values for filter dropdowns
   const cities = useMemo(
@@ -486,16 +506,43 @@ export function ContactsTable({
         </div>
       </div>
 
-      {/* Results count */}
-      <p className="text-xs text-muted-foreground">
-        {filtered.length} contact{filtered.length !== 1 ? "s" : ""}
-      </p>
+      {/* Results count + bulk action bar */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <p className="text-xs text-muted-foreground">
+          {filtered.length} contact{filtered.length !== 1 ? "s" : ""}
+          {selected.size > 0 && (
+            <span className="ml-2 text-blue-700 font-medium">· {selected.size} selected</span>
+          )}
+        </p>
+        {selected.size > 0 && (
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
+              Clear
+            </Button>
+            <DeepSearchBulkButton
+              contactIds={Array.from(selected)}
+              contactNamesByID={new Map(contacts.map((c) => [c.id, c.name]))}
+              onComplete={() => setSelected(new Set())}
+            />
+          </div>
+        )}
+      </div>
 
       {/* Table */}
       <div className="rounded-lg border border-border/50 overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/30 hover:bg-muted/30">
+              <TableHead className="w-8">
+                <input
+                  type="checkbox"
+                  className="size-4 cursor-pointer accent-blue-600"
+                  checked={filtered.length > 0 && filtered.every((c) => selected.has(c.id))}
+                  onChange={() => selectAllVisible(filtered.map((c) => c.id))}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label="Select all visible"
+                />
+              </TableHead>
               <TableHead>
                 <button onClick={() => toggleSort("name")} className="flex items-center font-medium">
                   Name / Company <SortIcon field="name" />
@@ -529,7 +576,7 @@ export function ContactsTable({
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
+                <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
                   No contacts found
                 </TableCell>
               </TableRow>
@@ -537,9 +584,18 @@ export function ContactsTable({
               filtered.map((c) => (
                 <TableRow
                   key={c.id}
-                  className="cursor-pointer"
+                  className={`cursor-pointer ${selected.has(c.id) ? "bg-blue-50/40" : ""}`}
                   onClick={() => router.push(`/contacts/${c.id}`)}
                 >
+                  <TableCell className="w-8" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      className="size-4 cursor-pointer accent-blue-600"
+                      checked={selected.has(c.id)}
+                      onChange={() => toggleSelect(c.id)}
+                      aria-label={`Select ${c.name}`}
+                    />
+                  </TableCell>
                   <TableCell>
                     <div className="font-medium leading-tight">{c.name}</div>
                     <div className="text-xs text-muted-foreground truncate max-w-[220px]">
