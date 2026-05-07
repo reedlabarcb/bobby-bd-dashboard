@@ -15,6 +15,10 @@ import {
   ExternalLink,
   Users,
   X,
+  Sparkles,
+  Loader2,
+  UserPlus,
+  CheckCircle2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -124,6 +128,20 @@ export function ContactsByCompany({
   const [addForm, setAddForm] = useState({ name: "", title: "", email: "", phone: "" });
   const [saving, setSaving] = useState(false);
 
+  type Candidate = {
+    name: string;
+    title: string | null;
+    email: string | null;
+    phone: string | null;
+    linkedinUrl: string | null;
+    source: "hunter" | "web_search";
+    confidence: number;
+  };
+  const [findingFor, setFindingFor] = useState<string | null>(null);
+  const [candidates, setCandidates] = useState<Record<string, Candidate[]>>({});
+  const [findErrors, setFindErrors] = useState<Record<string, string[]>>({});
+  const [savedNames, setSavedNames] = useState<Record<string, Set<string>>>({});
+
   const groups = useMemo(
     () => buildGroups(contacts, seedCompanies),
     [contacts, seedCompanies]
@@ -172,6 +190,70 @@ export function ContactsByCompany({
     setAddingTo(group.key);
     setAddForm({ name: "", title: "", email: "", phone: "" });
     setExpanded((prev) => new Set(prev).add(group.key));
+  }
+
+  async function findPeople(group: CompanyGroup) {
+    setFindingFor(group.key);
+    setExpanded((prev) => new Set(prev).add(group.key));
+    setFindErrors((prev) => ({ ...prev, [group.key]: [] }));
+    try {
+      const res = await fetch("/api/find-contacts-for-company", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company: group.display === NO_COMPANY ? null : group.display,
+          city: group.profile?.city ?? null,
+          state: group.profile?.state ?? null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setCandidates((prev) => ({ ...prev, [group.key]: data.candidates ?? [] }));
+      if (data.errors?.length) {
+        setFindErrors((prev) => ({ ...prev, [group.key]: data.errors }));
+      }
+      const total = (data.candidates ?? []).length;
+      if (total === 0) {
+        toast.info(`No candidates found for ${group.display}`);
+      } else {
+        toast.success(`Found ${total} candidate${total === 1 ? "" : "s"} for ${group.display}`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Find failed");
+    } finally {
+      setFindingFor(null);
+    }
+  }
+
+  async function addCandidate(group: CompanyGroup, c: { name: string; title: string | null; email: string | null; phone: string | null; linkedinUrl: string | null }) {
+    try {
+      const noteParts: string[] = [];
+      if (c.linkedinUrl) noteParts.push(`LinkedIn: ${c.linkedinUrl}`);
+      const res = await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: c.name,
+          title: c.title,
+          email: c.email,
+          phone: c.phone,
+          company: group.display === NO_COMPANY ? null : group.display,
+          type: "other",
+          source: "find-contacts (AI)",
+          notes: noteParts.join("\n") || null,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+      setSavedNames((prev) => {
+        const next = new Set(prev[group.key] ?? []);
+        next.add(c.name.toLowerCase());
+        return { ...prev, [group.key]: next };
+      });
+      toast.success(`Added ${c.name}`);
+      router.refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to add");
+    }
   }
 
   async function submitAdd(group: CompanyGroup) {
@@ -315,6 +397,24 @@ export function ContactsByCompany({
                     variant="ghost"
                     size="sm"
                     className="gap-1"
+                    disabled={findingFor === group.key}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      findPeople(group);
+                    }}
+                  >
+                    {findingFor === group.key ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="size-3.5" />
+                    )}
+                    Find People
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1"
                     onClick={(e) => {
                       e.stopPropagation();
                       startAdd(group);
@@ -388,18 +488,139 @@ export function ContactsByCompany({
                       </div>
                     )}
 
+                    {/* AI candidates panel — appears after clicking "Find People" */}
+                    {candidates[group.key] && candidates[group.key].length > 0 && (
+                      <div className="border-b border-border/50 bg-blue-950/10">
+                        <div className="px-3 py-2 flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-1.5 text-blue-300">
+                            <Sparkles className="size-3" />
+                            <span className="font-medium">
+                              Candidates found at {group.display}
+                            </span>
+                            <span className="text-muted-foreground">
+                              ({candidates[group.key].length})
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className="text-muted-foreground hover:text-foreground"
+                            onClick={() =>
+                              setCandidates((prev) => {
+                                const next = { ...prev };
+                                delete next[group.key];
+                                return next;
+                              })
+                            }
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        </div>
+                        {findErrors[group.key]?.length > 0 && (
+                          <div className="px-3 pb-2 text-[11px] text-amber-400/80">
+                            {findErrors[group.key].map((e, i) => (
+                              <div key={i}>⚠ {e}</div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="divide-y divide-border/50">
+                          {candidates[group.key].map((c, i) => {
+                            const isSaved = savedNames[group.key]?.has(c.name.toLowerCase());
+                            return (
+                              <div
+                                key={`${c.name}-${i}`}
+                                className="flex items-start gap-3 px-3 py-2 hover:bg-muted/20"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-medium text-sm">{c.name}</span>
+                                    {c.title && (
+                                      <span className="text-xs text-muted-foreground">
+                                        · {c.title}
+                                      </span>
+                                    )}
+                                    <Badge
+                                      className={
+                                        c.source === "hunter"
+                                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px]"
+                                          : "bg-blue-500/20 text-blue-300 border-blue-500/30 text-[10px]"
+                                      }
+                                    >
+                                      {c.source === "hunter"
+                                        ? `Hunter${c.confidence ? ` ${c.confidence}%` : ""}`
+                                        : "Web search"}
+                                    </Badge>
+                                  </div>
+                                  <div className="text-xs text-muted-foreground space-x-2 mt-0.5">
+                                    {c.email && <span>{c.email}</span>}
+                                    {c.phone && <span>· {c.phone}</span>}
+                                    {c.linkedinUrl && (
+                                      <a
+                                        href={
+                                          c.linkedinUrl.startsWith("http")
+                                            ? c.linkedinUrl
+                                            : `https://${c.linkedinUrl}`
+                                        }
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-0.5"
+                                      >
+                                        LinkedIn <ExternalLink className="size-2.5" />
+                                      </a>
+                                    )}
+                                  </div>
+                                </div>
+                                {isSaved ? (
+                                  <span className="inline-flex items-center gap-1 text-xs text-emerald-400 px-2 py-1">
+                                    <CheckCircle2 className="size-3.5" />
+                                    Added
+                                  </span>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 gap-1 text-xs"
+                                    onClick={() => addCandidate(group, c)}
+                                  >
+                                    <UserPlus className="size-3" />
+                                    Add
+                                  </Button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {/* People list */}
                     {group.people.length === 0 ? (
                       <div className="p-6 text-center text-xs text-muted-foreground">
                         No people at this company yet.
                         {!isAdding && (
-                          <button
-                            type="button"
-                            onClick={() => startAdd(group)}
-                            className="ml-1 text-blue-400 hover:text-blue-300 underline"
-                          >
-                            Add the first one →
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => findPeople(group)}
+                              disabled={findingFor === group.key}
+                              className="ml-1 text-blue-400 hover:text-blue-300 underline inline-flex items-center gap-1"
+                            >
+                              {findingFor === group.key ? (
+                                <Loader2 className="size-3 animate-spin" />
+                              ) : (
+                                <Sparkles className="size-3" />
+                              )}
+                              Find people →
+                            </button>
+                            <span className="mx-2 text-muted-foreground/40">or</span>
+                            <button
+                              type="button"
+                              onClick={() => startAdd(group)}
+                              className="text-blue-400 hover:text-blue-300 underline"
+                            >
+                              add manually
+                            </button>
+                          </>
                         )}
                       </div>
                     ) : (
