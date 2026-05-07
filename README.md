@@ -61,6 +61,25 @@ The `railway.toml` handles:
 - Health check on `/`
 - Auto-restart on failure
 
+### One-time post-deploy: cleanse broker contacts
+
+The dashboard excludes brokers and brokerages by design (filter list:
+[`src/lib/constants/broker-filter.ts`](src/lib/constants/broker-filter.ts)).
+After deploying, run the cleanup script once on the Railway production
+DB to remove any broker contacts that were imported before the filter
+was in place:
+
+```bash
+# In the Railway console for the bobby-bd-dashboard service:
+npx tsx scripts/remove-brokers.ts          # delete brokers
+npx tsx scripts/remove-brokers.ts --dry    # preview only
+```
+
+Safe to run multiple times — already-clean rows just no-op. Re-pointing
+of FK references (activities, buildings.landlord_contact_id) is handled
+automatically; per-attempt `contact_enrichments` rows for deleted contacts
+are removed.
+
 ## Features
 
 - **Dashboard** — Stats, recent activity, quick actions

@@ -23,12 +23,41 @@ const EXCEL_OPTIONS: Record<ExcelFormat, { label: string; hint: string; endpoint
 };
 
 type FileState = "queued" | "processing" | "done" | "error" | "skipped";
+type ExcludedRow = { name: string; title: string | null; company: string | null; reason: string };
 type FileRow = {
   file: File;
   state: FileState;
   message?: string;
   detail?: string;
+  excluded?: ExcludedRow[];
 };
+
+function ExcludedBrokers({ items }: { items: ExcludedRow[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="px-3 pb-2 text-[11px]">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="text-amber-700 hover:text-amber-800 underline-offset-2 hover:underline"
+      >
+        {open ? "Hide" : "Show"} {items.length} excluded broker{items.length === 1 ? "" : "s"} ▾
+      </button>
+      {open && (
+        <div className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 space-y-0.5 max-h-48 overflow-y-auto">
+          {items.map((it, i) => (
+            <div key={i} className="text-amber-900">
+              <span className="font-medium">{it.name}</span>
+              {it.title && <span className="text-amber-700"> · {it.title}</span>}
+              {it.company && <span className="text-amber-700"> · {it.company}</span>}
+              <span className="text-amber-600 ml-1">— {it.reason}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function classify(filename: string): "pdf" | "excel" | "other" {
   const ext = filename.split(".").pop()?.toLowerCase() || "";
@@ -105,10 +134,14 @@ export function HomeImportCard() {
         return { ...row, state: "done", message: summarizeProspecting(data.stats) };
       }
       if (excelFormat === "contacts") {
+        const excludedNote = data.excludedCount > 0
+          ? ` · ${data.excludedCount} broker${data.excludedCount === 1 ? "" : "s"} excluded`
+          : "";
         return {
           ...row,
           state: "done",
-          message: `${data.imported ?? 0} new · ${data.updated ?? 0} updated · ${data.skipped ?? 0} skipped`,
+          message: `${data.imported ?? 0} new · ${data.updated ?? 0} updated · ${data.skipped ?? 0} skipped${excludedNote}`,
+          excluded: data.excluded as Array<{ name: string; title: string | null; company: string | null; reason: string }> | undefined,
         };
       }
       return { ...row, state: "done", message: "imported" };
@@ -237,7 +270,8 @@ export function HomeImportCard() {
               const iconColor =
                 kind === "pdf" ? "text-red-600" : kind === "excel" ? "text-emerald-600" : "text-slate-600";
               return (
-                <div key={idx} className="flex items-center gap-3 px-3 py-2 text-xs">
+                <div key={idx}>
+                <div className="flex items-center gap-3 px-3 py-2 text-xs">
                   <Icon className={`h-4 w-4 shrink-0 ${iconColor}`} />
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{row.file.name}</div>
@@ -280,6 +314,10 @@ export function HomeImportCard() {
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   ) : null}
+                </div>
+                {row.excluded && row.excluded.length > 0 && (
+                  <ExcludedBrokers items={row.excluded} />
+                )}
                 </div>
               );
             })}

@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import { NextResponse } from "next/server";
 import { upsertContact, countTable } from "@/lib/import-helpers";
 import { contacts } from "@/lib/db/schema";
+import { brokerReason } from "@/lib/constants/broker-filter";
 
 export async function POST(request: Request) {
   try {
@@ -39,6 +40,7 @@ export async function POST(request: Request) {
 
     const before = countTable(contacts);
     let processed = 0;
+    const excluded: Array<{ name: string; title: string | null; company: string | null; reason: string }> = [];
 
     for (const row of data) {
       const mapped: Record<string, unknown> = {};
@@ -48,21 +50,39 @@ export async function POST(request: Request) {
         }
       }
 
-      if (mapped.name) {
-        upsertContact(
-          {
-            name: mapped.name as string,
-            email: (mapped.email as string) || null,
-            phone: (mapped.phone as string) || null,
-            company: (mapped.company as string) || null,
-            title: (mapped.title as string) || null,
-            type: (mapped.type as "buyer" | "seller" | "broker" | "lender" | "landlord" | "other") || "other",
-            notes: (mapped.notes as string) || null,
-          },
-          { sourceFile: file.name }
-        );
-        processed++;
+      if (!mapped.name) continue;
+
+      // Broker / brokerage filter — applied to every row before upsert
+      // so re-uploading the same file can never sneak brokers back in.
+      const reason = brokerReason({
+        name: mapped.name as string,
+        title: (mapped.title as string) || null,
+        company: (mapped.company as string) || null,
+        type: (mapped.type as string) || null,
+      });
+      if (reason) {
+        excluded.push({
+          name: mapped.name as string,
+          title: (mapped.title as string) || null,
+          company: (mapped.company as string) || null,
+          reason,
+        });
+        continue;
       }
+
+      upsertContact(
+        {
+          name: mapped.name as string,
+          email: (mapped.email as string) || null,
+          phone: (mapped.phone as string) || null,
+          company: (mapped.company as string) || null,
+          title: (mapped.title as string) || null,
+          type: (mapped.type as "buyer" | "seller" | "broker" | "lender" | "landlord" | "other") || "other",
+          notes: (mapped.notes as string) || null,
+        },
+        { sourceFile: file.name }
+      );
+      processed++;
     }
 
     const created = countTable(contacts) - before;
@@ -73,7 +93,14 @@ export async function POST(request: Request) {
       .where(eq(uploads.id, upload.id))
       .run();
 
-    return NextResponse.json({ imported: processed, created, updated, total: data.length });
+    return NextResponse.json({
+      imported: processed,
+      created,
+      updated,
+      excludedCount: excluded.length,
+      excluded,
+      total: data.length,
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Import failed" },

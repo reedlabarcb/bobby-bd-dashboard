@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { FindContactsButton } from "@/components/find-contacts-button";
 import { DeepSearchBulkButton } from "@/components/deep-search-bulk-button";
+import { brokerReason } from "@/lib/constants/broker-filter";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -100,6 +101,7 @@ export function ContactsTable({
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [brokerAcknowledged, setBrokerAcknowledged] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -216,6 +218,20 @@ export function ContactsTable({
       toast.error("Name is required");
       return;
     }
+    // Broker confirmation gate — warn but allow override (per spec).
+    const reason = brokerReason({
+      name: form.name,
+      title: form.title,
+      company: form.company,
+      type: form.type,
+    });
+    if (reason && !brokerAcknowledged) {
+      const ok = window.confirm(
+        `This looks like a broker contact (${reason}).\n\nBobby's dashboard excludes brokers and brokerages. Add anyway?`,
+      );
+      if (!ok) return;
+      setBrokerAcknowledged(true);
+    }
     setSaving(true);
     try {
       const res = await fetch("/api/contacts", {
@@ -229,6 +245,7 @@ export function ContactsTable({
       }
       toast.success("Contact created");
       setForm(EMPTY_FORM);
+      setBrokerAcknowledged(false);
       setAddOpen(false);
       router.refresh();
     } catch (e) {
@@ -237,6 +254,17 @@ export function ContactsTable({
       setSaving(false);
     }
   }
+
+  // Live broker hint while typing in the add form
+  const liveBrokerReason = useMemo(
+    () => brokerReason({
+      name: form.name,
+      title: form.title,
+      company: form.company,
+      type: form.type,
+    }),
+    [form.name, form.title, form.company, form.type],
+  );
 
   async function handleDelete() {
     if (!deleteId) return;
@@ -516,6 +544,13 @@ export function ContactsTable({
                   />
                 </div>
               </div>
+              {liveBrokerReason && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+                  <strong>Heads-up:</strong> this looks like a broker contact
+                  ({liveBrokerReason}). Bobby&apos;s dashboard excludes brokers
+                  and brokerages — you&apos;ll be asked to confirm on save.
+                </div>
+              )}
               <DialogFooter>
                 <Button onClick={handleCreate} disabled={saving}>
                   {saving ? "Creating..." : "Create Contact"}

@@ -21,6 +21,7 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { domainSearch } from "@/lib/api/hunter";
 import { searchPeopleAtCompany as pdlSearchPeople } from "@/lib/api/pdl";
+import { isBroker } from "@/lib/constants/broker-filter";
 
 export type CandidateContact = {
   name: string;
@@ -172,6 +173,18 @@ Return ONLY valid JSON, no preamble:
         }
       }
     }
+
+    // Drop any candidate that looks like a broker — title or name match.
+    const brokerCount = candidates.length;
+    const cleanCandidates = candidates.filter(
+      (c) => !isBroker({ name: c.name, title: c.title, company }),
+    );
+    const filteredOut = brokerCount - cleanCandidates.length;
+    if (filteredOut > 0) {
+      notFound.push(`Filtered out ${filteredOut} broker/brokerage candidate${filteredOut === 1 ? "" : "s"}`);
+    }
+    candidates.length = 0;
+    candidates.push(...cleanCandidates);
 
     // Sort: confirmed-email first, then by confidence, then name
     candidates.sort((a, b) => {

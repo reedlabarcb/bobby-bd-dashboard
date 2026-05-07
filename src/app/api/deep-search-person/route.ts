@@ -22,6 +22,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { contacts as contactsTable } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { brokerReason } from "@/lib/constants/broker-filter";
 import { findEmail, verifyEmail, domainSearch } from "@/lib/api/hunter";
 import { enrichPerson as pdlEnrichPerson } from "@/lib/api/pdl";
 import { scrapeLinkedIn } from "@/lib/api/apify";
@@ -288,6 +289,19 @@ export async function POST(request: Request) {
     const summary = facts.length === 0
       ? `No public information found for ${name}${company ? ` at ${company}` : ""}.`
       : `${name} is ${facts.join(", ")}.`;
+
+    // If the discovered person looks like a broker (title or company),
+    // skip — return a clear null-shaped response so the caller knows
+    // not to add them. Bobby's dashboard excludes broker contacts.
+    const brokerHit = brokerReason({ name, title, company });
+    if (brokerHit) {
+      return NextResponse.json({
+        skipped: true,
+        reason: `Contact appears to be a broker — skipped (${brokerHit})`,
+        name,
+        company,
+      });
+    }
 
     return NextResponse.json({
       name,

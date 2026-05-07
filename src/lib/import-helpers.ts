@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { buildings, contacts, leases, tenants } from "@/lib/db/schema";
 import { and, eq, sql } from "drizzle-orm";
+import { brokerReason } from "@/lib/constants/broker-filter";
 
 // =========================================================================
 // Pure parsing helpers
@@ -403,6 +404,19 @@ export type ContactInput = {
 };
 
 export function upsertContact(input: ContactInput, ctx: RowContext): number {
+  // Hard-block brokers/brokerages at the only insertion gate that every
+  // import path uses. Returns -1 to signal "skipped"; callers that care
+  // can ignore. Caller-side filters (e.g. /api/import-contacts) still
+  // run for richer error reporting (they're complementary, not redundant).
+  if (brokerReason({
+    name: input.name,
+    title: input.title ?? null,
+    company: input.company ?? null,
+    type: input.type,
+  })) {
+    return -1;
+  }
+
   let match: typeof contacts.$inferSelect | null = null;
   if (input.email) {
     match = db.select().from(contacts).where(eq(contacts.email, input.email)).get() ?? null;

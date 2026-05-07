@@ -13,6 +13,7 @@
  */
 
 import { NextResponse } from "next/server";
+import { isBroker } from "@/lib/constants/broker-filter";
 import { domainSearch, verifyEmail } from "@/lib/api/hunter";
 import { searchPeopleAtCompany as pdlSearchPeople } from "@/lib/api/pdl";
 import { searchCompany, AnthropicCreditsError } from "@/lib/api/claude-web-search";
@@ -209,6 +210,18 @@ export async function POST(request: Request) {
         }
       }
     }
+
+    // Drop broker/brokerage candidates before returning.
+    const brokerCount = people.length;
+    const cleanPeople = people.filter(
+      (p) => !isBroker({ name: p.name, title: p.title, company }),
+    );
+    const filteredOut = brokerCount - cleanPeople.length;
+    if (filteredOut > 0) {
+      notFound.push(`Filtered out ${filteredOut} broker/brokerage candidate${filteredOut === 1 ? "" : "s"}`);
+    }
+    people.length = 0;
+    people.push(...cleanPeople);
 
     // Sort: confirmed-email first, then has-predicted-email, then by confidence
     people.sort((a, b) => {

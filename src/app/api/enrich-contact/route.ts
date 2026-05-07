@@ -11,6 +11,7 @@ import { scrapeLinkedIn } from "@/lib/api/apify";
 import { enrichPerson as pdlEnrichPerson } from "@/lib/api/pdl";
 import { synthesizeContactInfo } from "@/lib/api/anthropic";
 import { NextResponse } from "next/server";
+import { matchesKeyword, BROKER_TITLE_KEYWORDS } from "@/lib/constants/broker-filter";
 
 // Loose name match: fold case + diacritics + trim, then check that all
 // last-name tokens appear in the candidate's full name.
@@ -231,6 +232,16 @@ export async function POST(request: Request) {
 
     function setIfBetter(field: string, value: string | null | undefined) {
       if (!value) return;
+      // Never write a broker title onto a contact — Bobby's dashboard
+      // excludes brokers. If a source returns one, drop it and surface
+      // the reason in notFound for visibility.
+      if (field === "title") {
+        const hit = matchesKeyword(value, BROKER_TITLE_KEYWORDS);
+        if (hit) {
+          notFound.push(`Skipped broker title "${value}" (matched "${hit}")`);
+          return;
+        }
+      }
       const current = (contact as unknown as Record<string, string | null>)[field];
       if (current && current.length > 0) return;
       updates[field] = value;
