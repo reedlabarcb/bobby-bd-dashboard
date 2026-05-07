@@ -138,13 +138,13 @@ const URGENCY_BADGE: Record<string, string> = {
   red: "bg-red-500/20 text-red-600 border-red-500/30",
   amber: "bg-amber-500/20 text-amber-600 border-amber-500/30",
   blue: "bg-blue-500/20 text-blue-600 border-blue-500/30",
-  gray: "bg-zinc-500/20 text-slate-500 border-zinc-500/30",
+  gray: "bg-zinc-500/20 text-slate-600 border-zinc-500/30",
 };
 
 const CLASS_BADGE: Record<string, string> = {
   A: "bg-emerald-500/20 text-emerald-600 border-emerald-500/30",
   B: "bg-blue-500/20 text-blue-600 border-blue-500/30",
-  C: "bg-zinc-500/20 text-slate-500 border-zinc-500/30",
+  C: "bg-zinc-500/20 text-slate-600 border-zinc-500/30",
 };
 
 type EnrichedBuilding = BuildingRow & {
@@ -397,7 +397,7 @@ export function BuildingsTable({
       {/* Summary stats */}
       <div className="grid grid-cols-4 gap-3">
         <Card className="p-3 border-zinc-500/30">
-          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs text-slate-600 font-medium uppercase tracking-wider">
             <Building className="size-3.5" />
             Buildings
           </div>
@@ -406,7 +406,7 @@ export function BuildingsTable({
           </div>
         </Card>
         <Card className="p-3 border-zinc-500/30">
-          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs text-slate-600 font-medium uppercase tracking-wider">
             <Users className="size-3.5" />
             Tracked Leases
           </div>

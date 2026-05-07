@@ -34,7 +34,7 @@ const TYPE_COLORS: Record<string, string> = {
   broker: "bg-amber-500/20 text-amber-600 border-amber-500/30",
   lender: "bg-purple-500/20 text-purple-600 border-purple-500/30",
   landlord: "bg-cyan-500/20 text-cyan-600 border-cyan-500/30",
-  other: "bg-zinc-500/20 text-slate-500 border-zinc-500/30",
+  other: "bg-zinc-500/20 text-slate-600 border-zinc-500/30",
 };
 
 const NO_COMPANY = "(No company)";
@@ -304,14 +304,14 @@ export function ContactsByCompany({
       {/* Stat cards */}
       <div className="grid grid-cols-3 gap-3">
         <Card className="p-3 border-zinc-500/30">
-          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs text-slate-600 font-medium uppercase tracking-wider">
             <Building2 className="size-3.5" />
             Companies
           </div>
           <div className="text-2xl font-bold text-slate-700 mt-1">{stats.totalCompanies}</div>
         </Card>
         <Card className="p-3 border-zinc-500/30">
-          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs text-slate-600 font-medium uppercase tracking-wider">
             <Users className="size-3.5" />
             People
           </div>

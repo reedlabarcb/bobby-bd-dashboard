@@ -139,7 +139,7 @@ const URGENCY_BADGE: Record<string, string> = {
   red: "bg-red-500/20 text-red-600 border-red-500/30",
   amber: "bg-amber-500/20 text-amber-600 border-amber-500/30",
   blue: "bg-blue-500/20 text-blue-600 border-blue-500/30",
-  gray: "bg-zinc-500/20 text-slate-500 border-zinc-500/30",
+  gray: "bg-zinc-500/20 text-slate-600 border-zinc-500/30",
 };
 
 const URGENCY_ROW_BG: Record<string, string> = {
@@ -531,7 +531,7 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
           </div>
         </Card>
         <Card className="p-3 border-zinc-500/30">
-          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs text-slate-600 font-medium uppercase tracking-wider">
             <Building2 className="size-3.5" />
             Total Tracked
           </div>

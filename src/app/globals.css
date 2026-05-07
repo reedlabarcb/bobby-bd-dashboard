@@ -62,7 +62,7 @@
   --secondary: #f1f5f9;           /* slate-100 */
   --secondary-foreground: #0f172a;
   --muted: #f8fafc;               /* slate-50 */
-  --muted-foreground: #64748b;    /* slate-500 */
+  --muted-foreground: #475569;    /* slate-600 — darker for better readability */
   --accent: #f1f5f9;
   --accent-foreground: #0f172a;
   --destructive: #ef4444;

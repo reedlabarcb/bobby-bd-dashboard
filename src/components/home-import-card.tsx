@@ -235,7 +235,7 @@ export function HomeImportCard() {
               const kind = classify(row.file.name);
               const Icon = kind === "pdf" ? FileText : FileSpreadsheet;
               const iconColor =
-                kind === "pdf" ? "text-red-600" : kind === "excel" ? "text-emerald-600" : "text-slate-500";
+                kind === "pdf" ? "text-red-600" : kind === "excel" ? "text-emerald-600" : "text-slate-600";
               return (
                 <div key={idx} className="flex items-center gap-3 px-3 py-2 text-xs">
                   <Icon className={`h-4 w-4 shrink-0 ${iconColor}`} />

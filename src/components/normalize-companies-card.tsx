@@ -77,7 +77,7 @@ export function NormalizeCompaniesCard() {
             <div className="space-y-0.5 mt-2 pl-4 max-h-40 overflow-y-auto">
               {result.examples.map((ex, i) => (
                 <div key={i} className="text-muted-foreground">
-                  <span className="text-slate-500">{ex.table}</span>{" "}
+                  <span className="text-slate-600">{ex.table}</span>{" "}
                   <span className="text-red-600 line-through">{ex.old}</span>{" "}
                   <span>→</span>{" "}
                   <span className="text-emerald-600">{ex.next}</span>

@@ -100,7 +100,7 @@ function getFileIcon(filename: string) {
 function StatusBadge({ status }: { status: string | null }) {
   const config: Record<string, { className: string; label: string }> = {
     pending: {
-      className: "bg-zinc-500/20 text-slate-500 border-zinc-500/30",
+      className: "bg-zinc-500/20 text-slate-600 border-zinc-500/30",
       label: "Pending",
     },
     processing: {
@@ -571,7 +571,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
 
             const propColor =
               PROPERTY_TYPE_COLORS[doc.propertyType ?? ""] ??
-              "text-slate-500 bg-slate-100";
+              "text-slate-600 bg-slate-100";
 
             return (
               <Card
@@ -608,7 +608,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
                             Box
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
                             <Upload className="h-2.5 w-2.5" />
                             Upload
                           </span>

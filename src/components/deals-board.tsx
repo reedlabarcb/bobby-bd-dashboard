@@ -29,14 +29,14 @@ const COLUMN_HEADER_COLORS: Record<string, string> = {
   prospect: "text-amber-600",
   active: "text-blue-600",
   closed: "text-green-400",
-  dead: "text-slate-500",
+  dead: "text-slate-600",
 };
 
 const COLUMN_COUNT_COLORS: Record<string, string> = {
   prospect: "bg-amber-500/20 text-amber-600",
   active: "bg-blue-500/20 text-blue-600",
   closed: "bg-green-500/20 text-green-400",
-  dead: "bg-zinc-500/20 text-slate-500",
+  dead: "bg-zinc-500/20 text-slate-600",
 };
 
 function formatCurrency(value: number | null): string {

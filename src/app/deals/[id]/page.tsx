@@ -34,7 +34,7 @@ const STATUS_COLORS: Record<string, string> = {
   prospect: "bg-amber-500/20 text-amber-600",
   active: "bg-blue-500/20 text-blue-600",
   closed: "bg-green-500/20 text-green-400",
-  dead: "bg-zinc-500/20 text-slate-500",
+  dead: "bg-zinc-500/20 text-slate-600",
 };
 
 export default async function DealDetailPage({

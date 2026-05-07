@@ -172,7 +172,7 @@ export default async function DashboardPage() {
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <span className="inline-block rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-500">
+                      <span className="inline-block rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-600">
                         {a.type}
                       </span>
                       <p className="mt-0.5 text-[11px] text-muted-foreground">

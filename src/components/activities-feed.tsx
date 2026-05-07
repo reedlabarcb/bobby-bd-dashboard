@@ -47,7 +47,7 @@ const typeConfig: Record<string, { icon: typeof Phone; color: string; bg: string
   call: { icon: Phone, color: "text-emerald-600", bg: "bg-emerald-100", badge: "bg-emerald-400/15 text-emerald-600 border-emerald-400/20" },
   email: { icon: Mail, color: "text-blue-600", bg: "bg-blue-100", badge: "bg-blue-400/15 text-blue-600 border-blue-400/20" },
   meeting: { icon: Calendar, color: "text-violet-600", bg: "bg-violet-100", badge: "bg-violet-400/15 text-violet-600 border-violet-400/20" },
-  note: { icon: FileText, color: "text-slate-500", bg: "bg-slate-100", badge: "bg-zinc-400/15 text-slate-500 border-zinc-400/20" },
+  note: { icon: FileText, color: "text-slate-600", bg: "bg-slate-100", badge: "bg-zinc-400/15 text-slate-600 border-zinc-400/20" },
 };
 
 export function ActivitiesFeed({

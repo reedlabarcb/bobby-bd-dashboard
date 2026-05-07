@@ -43,7 +43,7 @@ const TYPE_COLORS: Record<string, string> = {
   broker: "bg-amber-500/20 text-amber-600 border-amber-500/30",
   lender: "bg-purple-500/20 text-purple-600 border-purple-500/30",
   landlord: "bg-cyan-500/20 text-cyan-600 border-cyan-500/30",
-  other: "bg-zinc-500/20 text-slate-500 border-zinc-500/30",
+  other: "bg-zinc-500/20 text-slate-600 border-zinc-500/30",
 };
 
 const TYPE_OPTIONS = ["buyer", "seller", "broker", "lender", "landlord", "other"] as const;
