@@ -19,7 +19,9 @@ import {
   Loader2,
   UserPlus,
   CheckCircle2,
+  Pencil,
 } from "lucide-react";
+import { ContactEditDialog } from "@/components/contact-edit-dialog";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -661,42 +663,66 @@ export function ContactsByCompany({
 
 function PersonRow({ person: p }: { person: Contact }) {
   const subtitle = [p.title, p.businessType].filter(Boolean).join(" · ");
+  const [editing, setEditing] = useState(false);
 
   return (
-    <Link
-      href={`/contacts/${p.id}`}
-      className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors"
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-foreground truncate">{p.name}</span>
-          {p.type && p.type !== "other" && (
-            <Badge className={`${TYPE_COLORS[p.type] || TYPE_COLORS.other} text-[10px]`}>
-              {p.type}
-            </Badge>
+    <>
+      <div className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors">
+        <Link href={`/contacts/${p.id}`} className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-foreground truncate">{p.name}</span>
+            {p.type && p.type !== "other" && (
+              <Badge className={`${TYPE_COLORS[p.type] || TYPE_COLORS.other} text-[10px]`}>
+                {p.type}
+              </Badge>
+            )}
+          </div>
+          {subtitle && (
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">{subtitle}</p>
           )}
+        </Link>
+        <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
+          {p.email ? (
+            <span className="flex items-center gap-1 max-w-[180px] truncate">
+              <Mail className="size-3 shrink-0" />
+              <span className="truncate">{p.email}</span>
+            </span>
+          ) : (
+            <span className="text-amber-600/70 italic">no email</span>
+          )}
+          {p.phone && (
+            <span className="flex items-center gap-1">
+              <Phone className="size-3" />
+              {p.phone}
+            </span>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setEditing(true);
+            }}
+          >
+            <Pencil className="size-3.5" />
+          </Button>
+          <Link
+            href={`/contacts/${p.id}`}
+            className="text-muted-foreground/50 hover:text-foreground"
+          >
+            <ExternalLink className="size-3.5" />
+          </Link>
         </div>
-        {subtitle && (
-          <p className="text-xs text-muted-foreground mt-0.5 truncate">{subtitle}</p>
-        )}
       </div>
-      <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
-        {p.email ? (
-          <span className="flex items-center gap-1 max-w-[180px] truncate">
-            <Mail className="size-3 shrink-0" />
-            <span className="truncate">{p.email}</span>
-          </span>
-        ) : (
-          <span className="text-amber-600/70 italic">no email</span>
-        )}
-        {p.phone && (
-          <span className="flex items-center gap-1">
-            <Phone className="size-3" />
-            {p.phone}
-          </span>
-        )}
-        <ExternalLink className="size-3.5 text-muted-foreground/50 shrink-0" />
-      </div>
-    </Link>
+      {editing && (
+        <ContactEditDialog
+          contact={p}
+          open={editing}
+          onOpenChange={setEditing}
+        />
+      )}
+    </>
   );
 }

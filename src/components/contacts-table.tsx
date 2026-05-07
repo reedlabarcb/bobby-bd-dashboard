@@ -101,6 +101,26 @@ export function ContactsTable({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  async function bulkDelete() {
+    setBulkDeleting(true);
+    let ok = 0;
+    for (const id of Array.from(selected)) {
+      try {
+        const res = await fetch(`/api/contacts/${id}`, { method: "DELETE" });
+        if (res.ok) ok++;
+      } catch {
+        /* skip */
+      }
+    }
+    setBulkDeleting(false);
+    setBulkDeleteOpen(false);
+    setSelected(new Set());
+    toast.success(`Deleted ${ok} contact${ok === 1 ? "" : "s"}`);
+    router.refresh();
+  }
 
   function toggleSelect(id: number) {
     setSelected((prev) => {
@@ -524,6 +544,15 @@ export function ContactsTable({
               contactNamesByID={new Map(contacts.map((c) => [c.id, c.name]))}
               onComplete={() => setSelected(new Set())}
             />
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-700 border-red-200 hover:bg-red-50 hover:text-red-800 gap-1"
+              onClick={() => setBulkDeleteOpen(true)}
+            >
+              <Trash2 className="size-3.5" />
+              Delete ({selected.size})
+            </Button>
           </div>
         )}
       </div>
@@ -661,7 +690,32 @@ export function ContactsTable({
         </Table>
       </div>
 
-      {/* Delete confirmation dialog */}
+      {/* Bulk-delete confirmation dialog */}
+      <Dialog
+        open={bulkDeleteOpen}
+        onOpenChange={(o) => !bulkDeleting && setBulkDeleteOpen(o)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete {selected.size} contacts?</DialogTitle>
+            <DialogDescription>
+              This will permanently remove all selected contacts. This cannot be undone.
+              Activities and enrichment history will keep the contact_id pointer but
+              the contact rows themselves will be gone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkDeleteOpen(false)} disabled={bulkDeleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={bulkDelete} disabled={bulkDeleting}>
+              {bulkDeleting ? "Deleting..." : `Delete ${selected.size}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Single-row delete confirmation dialog */}
       <Dialog
         open={deleteId !== null}
         onOpenChange={(open) => !open && setDeleteId(null)}
