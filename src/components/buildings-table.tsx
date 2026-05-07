@@ -18,7 +18,10 @@ import {
   AlertTriangle,
   Sparkles,
   Loader2,
+  Pencil,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { GenericEditDialog } from "@/components/generic-edit-dialog";
 
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -539,13 +542,14 @@ export function BuildingsTable({
                   <SortIcon field="soonestExpiry" sortField={sortField} sortDir={sortDir} />
                 </button>
               </TableHead>
+              <TableHead className="w-8" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={8}
+                  colSpan={9}
                   className="text-center py-12 text-muted-foreground"
                 >
                   No buildings match your filters
@@ -591,6 +595,7 @@ function BuildingRowGroup({
 }) {
   const color = urgencyColor(b.soonestMonths);
   const landlord = b.landlordContactName || b.landlordName;
+  const [editing, setEditing] = useState(false);
 
   return (
     <>
@@ -672,11 +677,48 @@ function BuildingRowGroup({
             </span>
           )}
         </TableCell>
+        <TableCell className="w-8 px-1" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-1.5"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditing(true);
+            }}
+            title="Edit building"
+          >
+            <Pencil className="size-3.5" />
+          </Button>
+        </TableCell>
       </TableRow>
+      {editing && (
+        <GenericEditDialog
+          open={editing}
+          onOpenChange={setEditing}
+          resource="Building"
+          endpoint={`/api/buildings/${b.id}`}
+          row={b as unknown as Record<string, unknown>}
+          preview={b.address ?? b.name ?? `Building ${b.id}`}
+          fields={[
+            { key: "name", label: "Name", type: "text" },
+            { key: "address", label: "Address", type: "text", full: true },
+            { key: "city", label: "City", type: "text" },
+            { key: "state", label: "State", type: "text" },
+            { key: "submarket", label: "Submarket", type: "text" },
+            { key: "district", label: "District", type: "text" },
+            { key: "propertyClass", label: "Property class", type: "select", options: ["A", "B", "C"] },
+            { key: "propertySubtype", label: "Property subtype", type: "text" },
+            { key: "propertySizeSf", label: "Total SF", type: "number" },
+            { key: "landlordName", label: "Landlord", type: "text" },
+            { key: "notes", label: "Notes", type: "textarea", full: true },
+          ]}
+        />
+      )}
 
       {isExpanded && (
         <TableRow className="bg-muted/30 hover:bg-muted/30">
-          <TableCell colSpan={8} className="px-6 py-4">
+          <TableCell colSpan={9} className="px-6 py-4">
             <BuildingDetail
               building={b}
               onTenantClick={onTenantClick}

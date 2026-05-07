@@ -16,7 +16,9 @@ import {
   ChevronRight,
   ExternalLink,
   UserPlus,
+  Pencil,
 } from "lucide-react";
+import { GenericEditDialog } from "@/components/generic-edit-dialog";
 
 import { Button } from "@/components/ui/button";
 import { FindContactsButton } from "@/components/find-contacts-button";
@@ -798,13 +800,14 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
                       <SortIcon field="confidence" sortField={sortField} sortDir={sortDir} />
                     </button>
                   </TableHead>
+                  <TableHead className="w-8" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={12}
+                      colSpan={13}
                       className="text-center py-12 text-muted-foreground"
                     >
                       No leases match your filters
@@ -852,6 +855,7 @@ function LeaseRowGroup({
   onAddContact: () => void;
   isAddingContact: boolean;
 }) {
+  const [editing, setEditing] = useState(false);
   return (
     <>
       <TableRow
@@ -936,12 +940,53 @@ function LeaseRowGroup({
             "---"
           )}
         </TableCell>
+        <TableCell className="w-8 px-1" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-1.5"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditing(true);
+            }}
+            title="Edit lease"
+          >
+            <Pencil className="size-3.5" />
+          </Button>
+        </TableCell>
       </TableRow>
+      {editing && (
+        <GenericEditDialog
+          open={editing}
+          onOpenChange={setEditing}
+          resource="Lease"
+          endpoint={`/api/leases/${l.id}`}
+          row={l as unknown as Record<string, unknown>}
+          preview={`${l.tenantName} — ${l.propertyName ?? l.propertyAddress ?? ""}`}
+          fields={[
+            { key: "propertyName", label: "Property name", type: "text" },
+            { key: "propertyAddress", label: "Property address", type: "text" },
+            { key: "propertyCity", label: "City", type: "text" },
+            { key: "propertyState", label: "State", type: "text" },
+            { key: "propertyType", label: "Property type", type: "text" },
+            { key: "suiteUnit", label: "Suite/Unit", type: "text" },
+            { key: "squareFeet", label: "Square Feet", type: "number" },
+            { key: "leaseStartDate", label: "Lease Start", type: "date" },
+            { key: "leaseEndDate", label: "Lease End", type: "date" },
+            { key: "rentPsf", label: "Rent PSF", type: "number" },
+            { key: "annualRent", label: "Annual Rent", type: "number" },
+            { key: "leaseType", label: "Lease Type", type: "select", options: ["NNN", "gross", "modified_gross", "ground"] },
+            { key: "options", label: "Renewal options", type: "textarea", full: true },
+            { key: "escalations", label: "Escalations", type: "textarea", full: true },
+            { key: "confidence", label: "Confidence", type: "select", options: ["high", "medium", "low"] },
+          ]}
+        />
+      )}
 
       {/* Expanded detail row */}
       {isExpanded && (
         <TableRow className="bg-muted/30 hover:bg-muted/30">
-          <TableCell colSpan={12} className="px-6 py-4">
+          <TableCell colSpan={13} className="px-6 py-4">
             <div className="grid grid-cols-3 gap-6 text-sm">
               {/* Lease details */}
               <div className="space-y-2">
