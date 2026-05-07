@@ -73,14 +73,16 @@ export default async function LeasesPage() {
   const now = new Date();
 
   const enriched = allLeases.map((l) => {
-    // Recompute from leaseEndDate so the value stays accurate over time
+    // Recompute from leaseEndDate using day-precision so a lease ending
+    // Nov 13 (vs today May 7) reports 6 months — not 6 from integer
+    // month-subtraction that would conflict with the exclusive horizon
+    // bands the filter uses.
     let monthsRemaining: number | null = null;
     if (l.leaseEndDate) {
       const end = new Date(l.leaseEndDate);
       if (!isNaN(end.getTime())) {
-        monthsRemaining =
-          (end.getFullYear() - now.getFullYear()) * 12 +
-          (end.getMonth() - now.getMonth());
+        const diffMs = end.getTime() - now.getTime();
+        monthsRemaining = Math.round(diffMs / (1000 * 60 * 60 * 24 * 30.44));
       }
     }
 
