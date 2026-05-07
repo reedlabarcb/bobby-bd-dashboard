@@ -29,12 +29,12 @@ import { Card } from "@/components/ui/card";
 import type { Contact } from "@/lib/db/schema";
 
 const TYPE_COLORS: Record<string, string> = {
-  buyer: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-  seller: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  broker: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-  lender: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  landlord: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
-  other: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
+  buyer: "bg-emerald-500/20 text-emerald-600 border-emerald-500/30",
+  seller: "bg-blue-500/20 text-blue-600 border-blue-500/30",
+  broker: "bg-amber-500/20 text-amber-600 border-amber-500/30",
+  lender: "bg-purple-500/20 text-purple-600 border-purple-500/30",
+  landlord: "bg-cyan-500/20 text-cyan-600 border-cyan-500/30",
+  other: "bg-zinc-500/20 text-slate-500 border-zinc-500/30",
 };
 
 const NO_COMPANY = "(No company)";
@@ -304,25 +304,25 @@ export function ContactsByCompany({
       {/* Stat cards */}
       <div className="grid grid-cols-3 gap-3">
         <Card className="p-3 border-zinc-500/30">
-          <div className="flex items-center gap-2 text-xs text-zinc-400 font-medium uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium uppercase tracking-wider">
             <Building2 className="size-3.5" />
             Companies
           </div>
-          <div className="text-2xl font-bold text-zinc-300 mt-1">{stats.totalCompanies}</div>
+          <div className="text-2xl font-bold text-slate-700 mt-1">{stats.totalCompanies}</div>
         </Card>
         <Card className="p-3 border-zinc-500/30">
-          <div className="flex items-center gap-2 text-xs text-zinc-400 font-medium uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium uppercase tracking-wider">
             <Users className="size-3.5" />
             People
           </div>
-          <div className="text-2xl font-bold text-zinc-300 mt-1">{stats.totalPeople}</div>
+          <div className="text-2xl font-bold text-slate-700 mt-1">{stats.totalPeople}</div>
         </Card>
         <Card className="p-3 border-emerald-500/30 bg-emerald-950/10">
-          <div className="flex items-center gap-2 text-xs text-emerald-400 font-medium uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs text-emerald-600 font-medium uppercase tracking-wider">
             <Mail className="size-3.5" />
             With Email
           </div>
-          <div className="text-2xl font-bold text-emerald-400 mt-1">{stats.peopleWithEmail}</div>
+          <div className="text-2xl font-bold text-emerald-600 mt-1">{stats.peopleWithEmail}</div>
         </Card>
       </div>
 
@@ -492,7 +492,7 @@ export function ContactsByCompany({
                     {candidates[group.key] && candidates[group.key].length > 0 && (
                       <div className="border-b border-border/50 bg-blue-950/10">
                         <div className="px-3 py-2 flex items-center justify-between text-xs">
-                          <div className="flex items-center gap-1.5 text-blue-300">
+                          <div className="flex items-center gap-1.5 text-blue-500">
                             <Sparkles className="size-3" />
                             <span className="font-medium">
                               Candidates found at {group.display}
@@ -516,7 +516,7 @@ export function ContactsByCompany({
                           </button>
                         </div>
                         {findErrors[group.key]?.length > 0 && (
-                          <div className="px-3 pb-2 text-[11px] text-amber-400/80">
+                          <div className="px-3 pb-2 text-[11px] text-amber-600/80">
                             {findErrors[group.key].map((e, i) => (
                               <div key={i}>⚠ {e}</div>
                             ))}
@@ -542,7 +542,7 @@ export function ContactsByCompany({
                                       className={
                                         c.source === "hunter"
                                           ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px]"
-                                          : "bg-blue-500/20 text-blue-300 border-blue-500/30 text-[10px]"
+                                          : "bg-blue-500/20 text-blue-500 border-blue-500/30 text-[10px]"
                                       }
                                     >
                                       {c.source === "hunter"
@@ -562,7 +562,7 @@ export function ContactsByCompany({
                                         }
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-0.5"
+                                        className="text-blue-600 hover:text-blue-500 inline-flex items-center gap-0.5"
                                       >
                                         LinkedIn <ExternalLink className="size-2.5" />
                                       </a>
@@ -570,7 +570,7 @@ export function ContactsByCompany({
                                   </div>
                                 </div>
                                 {isSaved ? (
-                                  <span className="inline-flex items-center gap-1 text-xs text-emerald-400 px-2 py-1">
+                                  <span className="inline-flex items-center gap-1 text-xs text-emerald-600 px-2 py-1">
                                     <CheckCircle2 className="size-3.5" />
                                     Added
                                   </span>
@@ -603,7 +603,7 @@ export function ContactsByCompany({
                               type="button"
                               onClick={() => findPeople(group)}
                               disabled={findingFor === group.key}
-                              className="ml-1 text-blue-400 hover:text-blue-300 underline inline-flex items-center gap-1"
+                              className="ml-1 text-blue-600 hover:text-blue-500 underline inline-flex items-center gap-1"
                             >
                               {findingFor === group.key ? (
                                 <Loader2 className="size-3 animate-spin" />
@@ -616,7 +616,7 @@ export function ContactsByCompany({
                             <button
                               type="button"
                               onClick={() => startAdd(group)}
-                              className="text-blue-400 hover:text-blue-300 underline"
+                              className="text-blue-600 hover:text-blue-500 underline"
                             >
                               add manually
                             </button>
@@ -679,7 +679,7 @@ function PersonRow({ person: p }: { person: Contact }) {
             <span className="truncate">{p.email}</span>
           </span>
         ) : (
-          <span className="text-amber-400/70 italic">no email</span>
+          <span className="text-amber-600/70 italic">no email</span>
         )}
         {p.phone && (
           <span className="flex items-center gap-1">

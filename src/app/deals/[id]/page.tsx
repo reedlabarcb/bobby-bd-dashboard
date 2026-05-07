@@ -31,10 +31,10 @@ function formatCurrency(value: number | null): string {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  prospect: "bg-amber-500/20 text-amber-400",
-  active: "bg-blue-500/20 text-blue-400",
+  prospect: "bg-amber-500/20 text-amber-600",
+  active: "bg-blue-500/20 text-blue-600",
   closed: "bg-green-500/20 text-green-400",
-  dead: "bg-zinc-500/20 text-zinc-400",
+  dead: "bg-zinc-500/20 text-slate-500",
 };
 
 export default async function DealDetailPage({
@@ -175,7 +175,7 @@ export default async function DealDetailPage({
               )}
               <div className="flex items-center gap-2 text-sm">
                 <DollarSign className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="font-medium text-emerald-400">
+                <span className="font-medium text-emerald-600">
                   {formatCurrency(deal.askingPrice)}
                 </span>
               </div>

@@ -38,12 +38,12 @@ import {
 } from "@/components/ui/select";
 
 const TYPE_COLORS: Record<string, string> = {
-  buyer: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-  seller: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  broker: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-  lender: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  landlord: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
-  other: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
+  buyer: "bg-emerald-500/20 text-emerald-600 border-emerald-500/30",
+  seller: "bg-blue-500/20 text-blue-600 border-blue-500/30",
+  broker: "bg-amber-500/20 text-amber-600 border-amber-500/30",
+  lender: "bg-purple-500/20 text-purple-600 border-purple-500/30",
+  landlord: "bg-cyan-500/20 text-cyan-600 border-cyan-500/30",
+  other: "bg-zinc-500/20 text-slate-500 border-zinc-500/30",
 };
 
 const TYPE_OPTIONS = ["buyer", "seller", "broker", "lender", "landlord", "other"] as const;
@@ -342,7 +342,7 @@ export function EditContactCard({ contact }: { contact: ContactRecord }) {
               size="sm"
               onClick={del}
               disabled={deleting}
-              className="text-red-400 hover:text-red-300 hover:bg-red-950/30 gap-1"
+              className="text-red-600 hover:text-red-300 hover:bg-red-950/30 gap-1"
             >
               <Trash2 className="size-4" />
               {deleting ? "Deleting..." : "Delete contact"}
@@ -379,7 +379,7 @@ export function EditContactCard({ contact }: { contact: ContactRecord }) {
           <Row icon={<Mail className="size-4" />}>
             <a
               href={`mailto:${contact.email}`}
-              className="text-sm text-blue-400 hover:underline truncate"
+              className="text-sm text-blue-600 hover:underline truncate"
             >
               {contact.email}
             </a>
@@ -496,7 +496,7 @@ function NotesWithLinks({ text }: { text: string }) {
               target="_blank"
               rel="noopener noreferrer"
               className={`underline ${
-                isLinkedIn ? "text-[#0A66C2] hover:text-[#0A66C2]/80" : "text-blue-400 hover:text-blue-300"
+                isLinkedIn ? "text-[#0A66C2] hover:text-[#0A66C2]/80" : "text-blue-600 hover:text-blue-500"
               }`}
             >
               {isLinkedIn ? "LinkedIn profile" : part}

@@ -71,7 +71,7 @@ export function ProbeCompanyCard() {
   return (
     <div className="rounded-lg border border-border bg-card p-4 mb-6">
       <div className="flex items-center gap-3 mb-3">
-        <Search className="h-4 w-4 text-blue-400" />
+        <Search className="h-4 w-4 text-blue-600" />
         <h3 className="text-sm font-semibold">Probe one company (raw Apollo + Hunter)</h3>
       </div>
       <p className="text-xs text-muted-foreground mb-3">
@@ -100,7 +100,7 @@ export function ProbeCompanyCard() {
       </div>
 
       {error ? (
-        <div className="flex items-center gap-2 text-xs text-red-400">
+        <div className="flex items-center gap-2 text-xs text-red-600">
           <AlertCircle className="h-3 w-3" /> {error}
         </div>
       ) : null}
@@ -120,12 +120,12 @@ export function ProbeCompanyCard() {
                 <span className="text-muted-foreground font-normal">
                   · {result.hunter.organization || result.hunter.domain || "unknown org"}
                   {" · "}
-                  <span className={result.hunter.emailCount ? "text-emerald-400" : "text-amber-400"}>
+                  <span className={result.hunter.emailCount ? "text-emerald-600" : "text-amber-600"}>
                     {result.hunter.emailCount ?? 0} emails
                   </span>
                 </span>
               ) : (
-                <span className="text-red-400 font-normal">· {result.hunter?.error}</span>
+                <span className="text-red-600 font-normal">· {result.hunter?.error}</span>
               )}
             </div>
             {result.hunter?.firstThree && result.hunter.firstThree.length > 0 ? (
@@ -134,8 +134,8 @@ export function ProbeCompanyCard() {
                   <div key={i} className="flex flex-wrap items-baseline gap-2 border-t border-border pt-1 first:border-t-0 first:pt-0">
                     <span className="font-medium">{p.name || "—"}</span>
                     {p.position ? <span className="text-muted-foreground">{p.position}</span> : null}
-                    {p.email ? <span className="text-emerald-400">{p.email}</span> : null}
-                    {p.phone ? <span className="text-blue-300">{p.phone}</span> : null}
+                    {p.email ? <span className="text-emerald-600">{p.email}</span> : null}
+                    {p.phone ? <span className="text-blue-500">{p.phone}</span> : null}
                     {p.linkedin ? (
                       <a href={p.linkedin} target="_blank" rel="noopener noreferrer" className="text-[#0A66C2] underline">
                         LinkedIn
@@ -159,12 +159,12 @@ export function ProbeCompanyCard() {
               <span>Apollo</span>
               {result.apollo?.ok ? (
                 <span className="text-muted-foreground font-normal">
-                  · <span className={(result.apollo.peopleCount ?? 0) + (result.apollo.contactsCount ?? 0) ? "text-emerald-400" : "text-amber-400"}>
+                  · <span className={(result.apollo.peopleCount ?? 0) + (result.apollo.contactsCount ?? 0) ? "text-emerald-600" : "text-amber-600"}>
                     {result.apollo.peopleCount ?? 0} people, {result.apollo.contactsCount ?? 0} contacts
                   </span>
                 </span>
               ) : (
-                <span className="text-red-400 font-normal">· {result.apollo?.error}</span>
+                <span className="text-red-600 font-normal">· {result.apollo?.error}</span>
               )}
             </div>
             {result.apollo?.firstThree && result.apollo.firstThree.length > 0 ? (
@@ -173,8 +173,8 @@ export function ProbeCompanyCard() {
                   <div key={i} className="flex flex-wrap items-baseline gap-2 border-t border-border pt-1 first:border-t-0 first:pt-0">
                     <span className="font-medium">{p.name || "—"}</span>
                     {p.title ? <span className="text-muted-foreground">{p.title}</span> : null}
-                    {p.email ? <span className="text-emerald-400">{p.email}</span> : <span className="text-amber-400 italic">no email</span>}
-                    {p.phoneCount ? <span className="text-blue-300">{p.phoneCount} phones</span> : null}
+                    {p.email ? <span className="text-emerald-600">{p.email}</span> : <span className="text-amber-600 italic">no email</span>}
+                    {p.phoneCount ? <span className="text-blue-500">{p.phoneCount} phones</span> : null}
                     {p.organization ? <span className="text-muted-foreground">@{p.organization}</span> : null}
                   </div>
                 ))}

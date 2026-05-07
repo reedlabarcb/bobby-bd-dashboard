@@ -131,7 +131,7 @@ export function BulkEnrichContacts({ contacts }: { contacts: Contact[] }) {
             disabled={running}
             className={`px-2.5 py-1 rounded-md transition-colors ${
               filter === f
-                ? "bg-blue-500/15 text-blue-300 border border-blue-500/40"
+                ? "bg-blue-500/15 text-blue-500 border border-blue-500/40"
                 : "border border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
             }`}
           >
@@ -215,7 +215,7 @@ export function BulkEnrichContacts({ contacts }: { contacts: Contact[] }) {
                     </span>
                   ) : (result.errors?.length ?? 0) > 0 ? (
                     <span
-                      className="flex items-start gap-1.5 text-amber-400 justify-end"
+                      className="flex items-start gap-1.5 text-amber-600 justify-end"
                       title={result.errors?.join("\n")}
                     >
                       <AlertCircle className="h-3 w-3 mt-0.5" />

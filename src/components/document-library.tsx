@@ -71,13 +71,13 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 };
 
 const PROPERTY_TYPE_COLORS: Record<string, string> = {
-  office: "text-blue-400 bg-blue-400/10",
-  retail: "text-amber-400 bg-amber-400/10",
-  industrial: "text-orange-400 bg-orange-400/10",
-  multifamily: "text-emerald-400 bg-emerald-400/10",
-  hospitality: "text-violet-400 bg-violet-400/10",
-  land: "text-lime-400 bg-lime-400/10",
-  mixed_use: "text-cyan-400 bg-cyan-400/10",
+  office: "text-blue-600 bg-blue-100",
+  retail: "text-amber-600 bg-amber-100",
+  industrial: "text-orange-600 bg-orange-100",
+  multifamily: "text-emerald-600 bg-emerald-100",
+  hospitality: "text-violet-600 bg-violet-100",
+  land: "text-lime-600 bg-lime-100",
+  mixed_use: "text-cyan-600 bg-cyan-100",
 };
 
 function formatCurrency(value: number | null): string {
@@ -92,28 +92,28 @@ function formatCurrency(value: number | null): string {
 function getFileIcon(filename: string) {
   const ext = filename.split(".").pop()?.toLowerCase();
   if (ext === "xlsx" || ext === "xls" || ext === "csv") {
-    return <FileSpreadsheet className="h-5 w-5 text-emerald-400" />;
+    return <FileSpreadsheet className="h-5 w-5 text-emerald-600" />;
   }
-  return <FileText className="h-5 w-5 text-blue-400" />;
+  return <FileText className="h-5 w-5 text-blue-600" />;
 }
 
 function StatusBadge({ status }: { status: string | null }) {
   const config: Record<string, { className: string; label: string }> = {
     pending: {
-      className: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
+      className: "bg-zinc-500/20 text-slate-500 border-zinc-500/30",
       label: "Pending",
     },
     processing: {
       className:
-        "bg-blue-500/20 text-blue-400 border-blue-500/30 animate-pulse",
+        "bg-blue-500/20 text-blue-600 border-blue-500/30 animate-pulse",
       label: "Processing",
     },
     done: {
-      className: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+      className: "bg-emerald-500/20 text-emerald-600 border-emerald-500/30",
       label: "Done",
     },
     error: {
-      className: "bg-red-500/20 text-red-400 border-red-500/30",
+      className: "bg-red-500/20 text-red-600 border-red-500/30",
       label: "Error",
     },
   };
@@ -272,29 +272,29 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
       label: "Documents Indexed",
       value: stats.totalDocs,
       icon: FileText,
-      color: "text-blue-400",
-      bg: "bg-blue-400/10",
+      color: "text-blue-600",
+      bg: "bg-blue-100",
     },
     {
       label: "Processed",
       value: stats.processedDocs,
       icon: Check,
-      color: "text-emerald-400",
-      bg: "bg-emerald-400/10",
+      color: "text-emerald-600",
+      bg: "bg-emerald-100",
     },
     {
       label: "Tenants Found",
       value: stats.totalTenants,
       icon: Users,
-      color: "text-amber-400",
-      bg: "bg-amber-400/10",
+      color: "text-amber-600",
+      bg: "bg-amber-100",
     },
     {
       label: "Leases Extracted",
       value: stats.totalLeases,
       icon: ScrollText,
-      color: "text-violet-400",
-      bg: "bg-violet-400/10",
+      color: "text-violet-600",
+      bg: "bg-violet-100",
     },
   ];
 
@@ -314,7 +314,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
           {/* Box connect */}
           <TooltipProvider>
             {boxStatus === "connected" ? (
-              <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 gap-1">
+              <Badge className="bg-emerald-500/20 text-emerald-600 border border-emerald-500/30 gap-1">
                 <Cloud className="h-3 w-3" />
                 Box Connected
               </Badge>
@@ -452,7 +452,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
             placeholder="Search documents..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 bg-card border-zinc-700"
+            className="pl-9 bg-card border-slate-200"
           />
           {search && (
             <button
@@ -468,7 +468,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
           value={typeFilter}
           onValueChange={(v) => setTypeFilter(v ?? "all")}
         >
-          <SelectTrigger className="w-[160px] bg-card border-zinc-700">
+          <SelectTrigger className="w-[160px] bg-card border-slate-200">
             <SelectValue placeholder="Doc Type" />
           </SelectTrigger>
           <SelectContent>
@@ -485,7 +485,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
           value={statusFilter}
           onValueChange={(v) => setStatusFilter(v ?? "all")}
         >
-          <SelectTrigger className="w-[140px] bg-card border-zinc-700">
+          <SelectTrigger className="w-[140px] bg-card border-slate-200">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -501,7 +501,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
           value={propTypeFilter}
           onValueChange={(v) => setPropTypeFilter(v ?? "all")}
         >
-          <SelectTrigger className="w-[160px] bg-card border-zinc-700">
+          <SelectTrigger className="w-[160px] bg-card border-slate-200">
             <SelectValue placeholder="Property Type" />
           </SelectTrigger>
           <SelectContent>
@@ -571,7 +571,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
 
             const propColor =
               PROPERTY_TYPE_COLORS[doc.propertyType ?? ""] ??
-              "text-zinc-400 bg-zinc-400/10";
+              "text-slate-500 bg-slate-100";
 
             return (
               <Card
@@ -592,23 +592,23 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
                     {/* Content */}
                     <div className="flex-1 min-w-0 space-y-1.5">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium text-zinc-100 truncate max-w-[400px]">
+                        <span className="text-sm font-medium text-slate-900 truncate max-w-[400px]">
                           {doc.filename}
                         </span>
                         <StatusBadge status={doc.status} />
                         {doc.documentType && (
-                          <span className="inline-flex items-center rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-zinc-300">
+                          <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-700">
                             {DOC_TYPE_LABELS[doc.documentType] ??
                               doc.documentType}
                           </span>
                         )}
                         {doc.boxFileId ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-400 border border-blue-500/20">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-600 border border-blue-500/20">
                             <Cloud className="h-2.5 w-2.5" />
                             Box
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
                             <Upload className="h-2.5 w-2.5" />
                             Upload
                           </span>
@@ -621,7 +621,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
                         doc.propertyType) && (
                         <div className="flex items-center gap-3 text-xs text-muted-foreground">
                           {doc.propertyName && (
-                            <span className="flex items-center gap-1 text-zinc-300">
+                            <span className="flex items-center gap-1 text-slate-700">
                               <Building2 className="h-3 w-3" />
                               {doc.propertyName}
                             </span>
@@ -653,7 +653,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
                       {/* Price + Summary */}
                       <div className="flex items-center gap-4 text-xs">
                         {doc.askingPrice != null && (
-                          <span className="flex items-center gap-1 text-emerald-400 font-semibold">
+                          <span className="flex items-center gap-1 text-emerald-600 font-semibold">
                             <DollarSign className="h-3 w-3" />
                             {formatCurrency(doc.askingPrice)}
                           </span>
@@ -689,7 +689,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
                   {/* Expanded details */}
                   {isExpanded && (
                     <div
-                      className="mt-4 border-t border-zinc-800 pt-4 space-y-4"
+                      className="mt-4 border-t border-slate-200 pt-4 space-y-4"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {/* Full AI Summary */}
@@ -698,7 +698,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
                           <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
                             AI Summary
                           </h4>
-                          <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                          <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
                             {doc.aiSummary}
                           </p>
                         </div>
@@ -714,9 +714,9 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
                             {parsedHighlights.map((h, i) => (
                               <li
                                 key={i}
-                                className="text-sm text-zinc-300 flex items-start gap-2"
+                                className="text-sm text-slate-700 flex items-start gap-2"
                               >
-                                <span className="text-emerald-400 mt-0.5">
+                                <span className="text-emerald-600 mt-0.5">
                                   &bull;
                                 </span>
                                 {h}
@@ -735,7 +735,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
                           <div className="overflow-x-auto">
                             <table className="w-full text-xs">
                               <thead>
-                                <tr className="border-b border-zinc-800 text-muted-foreground">
+                                <tr className="border-b border-slate-200 text-muted-foreground">
                                   <th className="text-left py-1.5 pr-4 font-medium">
                                     Tenant
                                   </th>
@@ -760,7 +760,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
                                 {parsedTenants.map((t, i) => (
                                   <tr
                                     key={i}
-                                    className="border-b border-zinc-800/50 text-zinc-300"
+                                    className="border-b border-slate-200/50 text-slate-700"
                                   >
                                     <td className="py-1.5 pr-4 font-medium">
                                       {t.name ?? "—"}
@@ -796,7 +796,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
                           <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
                             Broker
                           </h4>
-                          <div className="text-sm text-zinc-300 space-y-0.5">
+                          <div className="text-sm text-slate-700 space-y-0.5">
                             {parsedBroker.name && <p>{parsedBroker.name}</p>}
                             {parsedBroker.firm && (
                               <p className="text-muted-foreground">
@@ -814,7 +814,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
                         <div>
                           <a
                             href={`/deals/${doc.dealId}`}
-                            className="inline-flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                            className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-500 transition-colors"
                           >
                             <Building2 className="h-3.5 w-3.5" />
                             View Linked Deal
@@ -825,7 +825,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
                       {/* Error message + reprocess */}
                       {doc.status === "error" && (
                         <div className="rounded-md bg-red-500/10 border border-red-500/20 p-3 flex items-start justify-between gap-3">
-                          <p className="text-xs font-medium text-red-400">
+                          <p className="text-xs font-medium text-red-600">
                             {doc.errorMessage ? `Error: ${doc.errorMessage}` : "Processing failed"}
                           </p>
                           <Button

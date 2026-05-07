@@ -110,9 +110,9 @@ function SortIcon({
   if (sortField !== field)
     return <ArrowUpDown className="ml-1 size-3 text-muted-foreground/50" />;
   return sortDir === "asc" ? (
-    <ArrowUp className="ml-1 size-3 text-emerald-400" />
+    <ArrowUp className="ml-1 size-3 text-emerald-600" />
   ) : (
-    <ArrowDown className="ml-1 size-3 text-emerald-400" />
+    <ArrowDown className="ml-1 size-3 text-emerald-600" />
   );
 }
 
@@ -135,16 +135,16 @@ function urgencyColor(months: number | null) {
 }
 
 const URGENCY_BADGE: Record<string, string> = {
-  red: "bg-red-500/20 text-red-400 border-red-500/30",
-  amber: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-  blue: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  gray: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
+  red: "bg-red-500/20 text-red-600 border-red-500/30",
+  amber: "bg-amber-500/20 text-amber-600 border-amber-500/30",
+  blue: "bg-blue-500/20 text-blue-600 border-blue-500/30",
+  gray: "bg-zinc-500/20 text-slate-500 border-zinc-500/30",
 };
 
 const CLASS_BADGE: Record<string, string> = {
-  A: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-  B: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  C: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
+  A: "bg-emerald-500/20 text-emerald-600 border-emerald-500/30",
+  B: "bg-blue-500/20 text-blue-600 border-blue-500/30",
+  C: "bg-zinc-500/20 text-slate-500 border-zinc-500/30",
 };
 
 type EnrichedBuilding = BuildingRow & {
@@ -397,38 +397,38 @@ export function BuildingsTable({
       {/* Summary stats */}
       <div className="grid grid-cols-4 gap-3">
         <Card className="p-3 border-zinc-500/30">
-          <div className="flex items-center gap-2 text-xs text-zinc-400 font-medium uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium uppercase tracking-wider">
             <Building className="size-3.5" />
             Buildings
           </div>
-          <div className="text-2xl font-bold text-zinc-300 mt-1">
+          <div className="text-2xl font-bold text-slate-700 mt-1">
             {stats.total}
           </div>
         </Card>
         <Card className="p-3 border-zinc-500/30">
-          <div className="flex items-center gap-2 text-xs text-zinc-400 font-medium uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium uppercase tracking-wider">
             <Users className="size-3.5" />
             Tracked Leases
           </div>
-          <div className="text-2xl font-bold text-zinc-300 mt-1">
+          <div className="text-2xl font-bold text-slate-700 mt-1">
             {numberFmt.format(stats.totalLeases)}
           </div>
         </Card>
         <Card className="p-3 border-amber-500/30 bg-amber-950/10">
-          <div className="flex items-center gap-2 text-xs text-amber-400 font-medium uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs text-amber-600 font-medium uppercase tracking-wider">
             <Clock className="size-3.5" />
             Rolling in 12 mo
           </div>
-          <div className="text-2xl font-bold text-amber-400 mt-1">
+          <div className="text-2xl font-bold text-amber-600 mt-1">
             {stats.buildingsRollingIn12}
           </div>
         </Card>
         <Card className="p-3 border-red-500/30 bg-red-950/10">
-          <div className="flex items-center gap-2 text-xs text-red-400 font-medium uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs text-red-600 font-medium uppercase tracking-wider">
             <AlertTriangle className="size-3.5" />
             Rolling in 6 mo
           </div>
-          <div className="text-2xl font-bold text-red-400 mt-1">
+          <div className="text-2xl font-bold text-red-600 mt-1">
             {stats.buildingsRollingIn6}
           </div>
         </Card>
@@ -639,7 +639,7 @@ function BuildingRowGroup({
           {b.landlordContactId && landlord ? (
             <a
               href={`/contacts?id=${b.landlordContactId}`}
-              className="text-blue-400 hover:text-blue-300"
+              className="text-blue-600 hover:text-blue-500"
               onClick={(e) => e.stopPropagation()}
             >
               {landlord}
@@ -763,7 +763,7 @@ function BuildingDetail({
                           disabled={enrichingTenantId === l.tenantId}
                           className={`inline-flex items-center gap-1.5 text-left transition-colors ${
                             l.tenantContactId
-                              ? "text-blue-400 hover:text-blue-300 hover:underline"
+                              ? "text-blue-600 hover:text-blue-500 hover:underline"
                               : "text-amber-300 hover:text-amber-200 hover:underline"
                           } disabled:opacity-60`}
                           title={

@@ -151,7 +151,7 @@ export function HomeImportCard() {
     <Card className="border-0 bg-card">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <Upload className="h-4 w-4 text-blue-400" />
+          <Upload className="h-4 w-4 text-blue-600" />
           <CardTitle className="text-base font-medium">Import Files</CardTitle>
         </div>
         <CardDescription>
@@ -174,7 +174,7 @@ export function HomeImportCard() {
                 className={`flex items-start gap-3 rounded-md border p-2.5 cursor-pointer transition-colors ${
                   selected
                     ? "border-blue-500/50 bg-blue-500/5"
-                    : "border-border bg-card/80 hover:border-zinc-700"
+                    : "border-border bg-card/80 hover:border-slate-200"
                 }`}
               >
                 <input
@@ -206,7 +206,7 @@ export function HomeImportCard() {
               if (fileRef.current) fileRef.current.value = "";
             }}
             disabled={running}
-            className="flex-1 text-xs file:mr-3 file:rounded-md file:border-0 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-zinc-100 hover:file:bg-zinc-700 disabled:opacity-50"
+            className="flex-1 text-xs file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-slate-900 hover:file:bg-slate-200 disabled:opacity-50"
           />
           {files.length > 0 ? (
             <Button onClick={clearAll} disabled={running} variant="outline" size="sm">
@@ -235,7 +235,7 @@ export function HomeImportCard() {
               const kind = classify(row.file.name);
               const Icon = kind === "pdf" ? FileText : FileSpreadsheet;
               const iconColor =
-                kind === "pdf" ? "text-red-400" : kind === "excel" ? "text-emerald-400" : "text-zinc-500";
+                kind === "pdf" ? "text-red-600" : kind === "excel" ? "text-emerald-600" : "text-slate-500";
               return (
                 <div key={idx} className="flex items-center gap-3 px-3 py-2 text-xs">
                   <Icon className={`h-4 w-4 shrink-0 ${iconColor}`} />
@@ -254,15 +254,15 @@ export function HomeImportCard() {
                         {kind === "pdf" ? "Claude parsing..." : "Importing..."}
                       </span>
                     ) : row.state === "done" ? (
-                      <span className="flex items-center gap-1.5 justify-end text-emerald-400">
+                      <span className="flex items-center gap-1.5 justify-end text-emerald-600">
                         <CheckCircle2 className="h-3 w-3" />
                         {row.message}
                       </span>
                     ) : row.state === "skipped" ? (
-                      <span className="text-amber-400">{row.message}</span>
+                      <span className="text-amber-600">{row.message}</span>
                     ) : (
                       <span
-                        className="flex items-center gap-1.5 justify-end text-red-400"
+                        className="flex items-center gap-1.5 justify-end text-red-600"
                         title={row.message}
                       >
                         <AlertCircle className="h-3 w-3" />

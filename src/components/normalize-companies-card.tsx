@@ -42,7 +42,7 @@ export function NormalizeCompaniesCard() {
   return (
     <div className="rounded-lg border border-border bg-card p-4 mb-6">
       <div className="flex items-center gap-3 mb-2">
-        <Wand2 className="h-4 w-4 text-blue-400" />
+        <Wand2 className="h-4 w-4 text-blue-600" />
         <h3 className="text-sm font-semibold">Normalize company punctuation</h3>
         <Button onClick={run} disabled={loading} size="sm" variant="outline" className="ml-auto">
           {loading ? (
@@ -61,14 +61,14 @@ export function NormalizeCompaniesCard() {
       </p>
 
       {error ? (
-        <div className="flex items-center gap-2 text-xs text-red-400">
+        <div className="flex items-center gap-2 text-xs text-red-600">
           <AlertCircle className="h-3 w-3" /> {error}
         </div>
       ) : null}
 
       {result ? (
         <div className="text-xs">
-          <div className="flex items-center gap-2 text-emerald-400 font-medium mb-1.5">
+          <div className="flex items-center gap-2 text-emerald-600 font-medium mb-1.5">
             <CheckCircle2 className="h-3.5 w-3.5" />
             Updated · {result.tenantsUpdated} tenants · {result.contactsUpdated} contact companies ·{" "}
             {result.buildingsUpdated} landlords · {result.leasesUpdated} lease properties
@@ -77,10 +77,10 @@ export function NormalizeCompaniesCard() {
             <div className="space-y-0.5 mt-2 pl-4 max-h-40 overflow-y-auto">
               {result.examples.map((ex, i) => (
                 <div key={i} className="text-muted-foreground">
-                  <span className="text-zinc-500">{ex.table}</span>{" "}
-                  <span className="text-red-400 line-through">{ex.old}</span>{" "}
+                  <span className="text-slate-500">{ex.table}</span>{" "}
+                  <span className="text-red-600 line-through">{ex.old}</span>{" "}
                   <span>→</span>{" "}
-                  <span className="text-emerald-400">{ex.next}</span>
+                  <span className="text-emerald-600">{ex.next}</span>
                 </div>
               ))}
             </div>

@@ -136,10 +136,10 @@ function urgencyColor(months: number | null) {
 }
 
 const URGENCY_BADGE: Record<string, string> = {
-  red: "bg-red-500/20 text-red-400 border-red-500/30",
-  amber: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-  blue: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  gray: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
+  red: "bg-red-500/20 text-red-600 border-red-500/30",
+  amber: "bg-amber-500/20 text-amber-600 border-amber-500/30",
+  blue: "bg-blue-500/20 text-blue-600 border-blue-500/30",
+  gray: "bg-zinc-500/20 text-slate-500 border-zinc-500/30",
 };
 
 const URGENCY_ROW_BG: Record<string, string> = {
@@ -150,12 +150,12 @@ const URGENCY_ROW_BG: Record<string, string> = {
 };
 
 const CONFIDENCE_BADGE: Record<string, string> = {
-  high: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-  medium: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-  low: "bg-red-500/20 text-red-400 border-red-500/30",
+  high: "bg-emerald-500/20 text-emerald-600 border-emerald-500/30",
+  medium: "bg-amber-500/20 text-amber-600 border-amber-500/30",
+  low: "bg-red-500/20 text-red-600 border-red-500/30",
 };
 
-const LEASE_TYPE_BADGE = "bg-violet-500/20 text-violet-400 border-violet-500/30";
+const LEASE_TYPE_BADGE = "bg-violet-500/20 text-violet-600 border-violet-500/30";
 
 function SortIcon({
   field,
@@ -169,9 +169,9 @@ function SortIcon({
   if (sortField !== field)
     return <ArrowUpDown className="ml-1 size-3 text-muted-foreground/50" />;
   return sortDir === "asc" ? (
-    <ArrowUp className="ml-1 size-3 text-emerald-400" />
+    <ArrowUp className="ml-1 size-3 text-emerald-600" />
   ) : (
-    <ArrowDown className="ml-1 size-3 text-emerald-400" />
+    <ArrowDown className="ml-1 size-3 text-emerald-600" />
   );
 }
 
@@ -504,38 +504,38 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
       {/* Summary stat cards */}
       <div className="grid grid-cols-4 gap-3">
         <Card className="p-3 border-red-500/30 bg-red-950/10">
-          <div className="flex items-center gap-2 text-xs text-red-400 font-medium uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs text-red-600 font-medium uppercase tracking-wider">
             <AlertTriangle className="size-3.5" />
             Expiring 6 mo
           </div>
-          <div className="text-2xl font-bold text-red-400 mt-1">
+          <div className="text-2xl font-bold text-red-600 mt-1">
             {stats.in6}
           </div>
         </Card>
         <Card className="p-3 border-amber-500/30 bg-amber-950/10">
-          <div className="flex items-center gap-2 text-xs text-amber-400 font-medium uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs text-amber-600 font-medium uppercase tracking-wider">
             <Clock className="size-3.5" />
             Expiring 12 mo
           </div>
-          <div className="text-2xl font-bold text-amber-400 mt-1">
+          <div className="text-2xl font-bold text-amber-600 mt-1">
             {stats.in12}
           </div>
         </Card>
         <Card className="p-3 border-blue-500/30 bg-blue-950/10">
-          <div className="flex items-center gap-2 text-xs text-blue-400 font-medium uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs text-blue-600 font-medium uppercase tracking-wider">
             <Clock className="size-3.5" />
             Expiring 24 mo
           </div>
-          <div className="text-2xl font-bold text-blue-400 mt-1">
+          <div className="text-2xl font-bold text-blue-600 mt-1">
             {stats.in24}
           </div>
         </Card>
         <Card className="p-3 border-zinc-500/30">
-          <div className="flex items-center gap-2 text-xs text-zinc-400 font-medium uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium uppercase tracking-wider">
             <Building2 className="size-3.5" />
             Total Tracked
           </div>
-          <div className="text-2xl font-bold text-zinc-300 mt-1">
+          <div className="text-2xl font-bold text-slate-700 mt-1">
             {stats.total}
           </div>
         </Card>
@@ -845,7 +845,7 @@ function LeaseRowGroup({
           <a
             href={`/contacts?view=company&search=${encodeURIComponent(l.tenantName)}`}
             onClick={(e) => e.stopPropagation()}
-            className="hover:text-blue-400 hover:underline transition-colors"
+            className="hover:text-blue-600 hover:underline transition-colors"
             title={`See contacts at ${l.tenantName}`}
           >
             {l.tenantName}
@@ -856,7 +856,7 @@ function LeaseRowGroup({
             <a
               href={`/buildings?id=${l.buildingId}`}
               onClick={(e) => e.stopPropagation()}
-              className="hover:text-blue-400 hover:underline transition-colors"
+              className="hover:text-blue-600 hover:underline transition-colors"
               title="Open building"
             >
               {l.propertyName || l.propertyAddress || "---"}
@@ -960,7 +960,7 @@ function LeaseRowGroup({
                       <a
                         href={`/contacts?view=company&search=${encodeURIComponent(l.tenantName)}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="text-xs text-blue-400 hover:text-blue-300"
+                        className="text-xs text-blue-600 hover:text-blue-500"
                       >
                         + Add a contact at this tenant →
                       </a>
@@ -988,7 +988,7 @@ function LeaseRowGroup({
                           <a
                             href={`/contacts?view=company&search=${encodeURIComponent(l.tenantName)}`}
                             onClick={(e) => e.stopPropagation()}
-                            className="text-xs text-blue-400 hover:text-blue-300"
+                            className="text-xs text-blue-600 hover:text-blue-500"
                           >
                             + {l.tenantContacts.length - 4} more →
                           </a>
@@ -1041,7 +1041,7 @@ function LeaseRowGroup({
                   {l.documentId && (
                     <a
                       href={`/library?doc=${l.documentId}`}
-                      className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                      className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-500 transition-colors"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <ExternalLink className="size-3" />
@@ -1051,7 +1051,7 @@ function LeaseRowGroup({
                   {l.dealId && (
                     <a
                       href={`/deals?id=${l.dealId}`}
-                      className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                      className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-500 transition-colors"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <ExternalLink className="size-3" />

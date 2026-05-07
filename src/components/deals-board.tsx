@@ -26,17 +26,17 @@ const STATUS_COLUMNS = [
 ] as const;
 
 const COLUMN_HEADER_COLORS: Record<string, string> = {
-  prospect: "text-amber-400",
-  active: "text-blue-400",
+  prospect: "text-amber-600",
+  active: "text-blue-600",
   closed: "text-green-400",
-  dead: "text-zinc-400",
+  dead: "text-slate-500",
 };
 
 const COLUMN_COUNT_COLORS: Record<string, string> = {
-  prospect: "bg-amber-500/20 text-amber-400",
-  active: "bg-blue-500/20 text-blue-400",
+  prospect: "bg-amber-500/20 text-amber-600",
+  active: "bg-blue-500/20 text-blue-600",
   closed: "bg-green-500/20 text-green-400",
-  dead: "bg-zinc-500/20 text-zinc-400",
+  dead: "bg-zinc-500/20 text-slate-500",
 };
 
 function formatCurrency(value: number | null): string {
@@ -253,7 +253,7 @@ export function DealsBoard({ deals }: { deals: Deal[] }) {
                           </p>
                         )}
                         {deal.askingPrice != null && (
-                          <p className="text-xs font-medium text-emerald-400 flex items-center gap-1">
+                          <p className="text-xs font-medium text-emerald-600 flex items-center gap-1">
                             <DollarSign className="h-3 w-3" />
                             {formatCurrency(deal.askingPrice)}
                           </p>

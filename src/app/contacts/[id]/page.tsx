@@ -27,12 +27,12 @@ import { AddActivityDialog } from "@/components/add-activity-dialog";
 import { EditContactCard } from "@/components/edit-contact-card";
 
 const TYPE_COLORS: Record<string, string> = {
-  buyer: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-  seller: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  broker: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-  lender: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  landlord: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
-  other: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
+  buyer: "bg-emerald-500/20 text-emerald-600 border-emerald-500/30",
+  seller: "bg-blue-500/20 text-blue-600 border-blue-500/30",
+  broker: "bg-amber-500/20 text-amber-600 border-amber-500/30",
+  lender: "bg-purple-500/20 text-purple-600 border-purple-500/30",
+  landlord: "bg-cyan-500/20 text-cyan-600 border-cyan-500/30",
+  other: "bg-zinc-500/20 text-slate-500 border-zinc-500/30",
 };
 
 const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
@@ -43,10 +43,10 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
 };
 
 const ACTIVITY_COLORS: Record<string, string> = {
-  call: "bg-blue-500/20 text-blue-400",
-  email: "bg-emerald-500/20 text-emerald-400",
-  meeting: "bg-amber-500/20 text-amber-400",
-  note: "bg-zinc-500/20 text-zinc-400",
+  call: "bg-blue-500/20 text-blue-600",
+  email: "bg-emerald-500/20 text-emerald-600",
+  meeting: "bg-amber-500/20 text-amber-600",
+  note: "bg-zinc-500/20 text-slate-500",
 };
 
 function formatDateTime(d: string | null) {

@@ -44,7 +44,7 @@ export function DiagnosticsCard() {
         ) : (
           <AlertCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
         )}
-        <span className={status.ok ? "text-emerald-400" : "text-red-400"}>{status.msg}</span>
+        <span className={status.ok ? "text-emerald-600" : "text-red-600"}>{status.msg}</span>
         {status.detail ? (
           <span className="text-muted-foreground truncate" title={status.detail}>
             · {status.detail}
@@ -57,7 +57,7 @@ export function DiagnosticsCard() {
   return (
     <div className="rounded-lg border border-border bg-card p-4 mb-6">
       <div className="flex items-center gap-3 mb-3">
-        <Stethoscope className="h-4 w-4 text-blue-400" />
+        <Stethoscope className="h-4 w-4 text-blue-600" />
         <h3 className="text-sm font-semibold">API Diagnostics</h3>
         <Button onClick={run} disabled={loading} size="sm" variant="outline" className="ml-auto">
           {loading ? (
@@ -71,7 +71,7 @@ export function DiagnosticsCard() {
       </div>
 
       {error ? (
-        <div className="flex items-center gap-2 text-xs text-red-400">
+        <div className="flex items-center gap-2 text-xs text-red-600">
           <AlertCircle className="h-3 w-3" /> {error}
         </div>
       ) : null}

@@ -63,7 +63,7 @@ function LoginForm() {
           autoComplete="current-password"
           required
         />
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-sm text-red-600">{error}</p>}
         <Button type="submit" disabled={submitting || !password} className="w-full">
           {submitting ? "Signing in..." : "Sign in"}
         </Button>

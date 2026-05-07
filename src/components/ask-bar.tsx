@@ -114,7 +114,7 @@ export function AskBar() {
   return (
     <div className="rounded-lg border border-border bg-card p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <Sparkles className="h-4 w-4 text-blue-400" />
+        <Sparkles className="h-4 w-4 text-blue-600" />
         <h3 className="text-sm font-semibold">Ask anything about your data</h3>
       </div>
 
@@ -156,7 +156,7 @@ export function AskBar() {
 
       {error ? (
         <div className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/5 p-3 text-xs">
-          <AlertCircle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
+          <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
           <div>
             <div className="font-medium text-red-300">Couldn&apos;t answer</div>
             <div className="text-red-300/80 mt-0.5">{error}</div>

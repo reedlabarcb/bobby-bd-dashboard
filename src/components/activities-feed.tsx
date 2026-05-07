@@ -44,10 +44,10 @@ type ContactOption = { id: number; name: string };
 type DealOption = { id: number; name: string };
 
 const typeConfig: Record<string, { icon: typeof Phone; color: string; bg: string; badge: string }> = {
-  call: { icon: Phone, color: "text-emerald-400", bg: "bg-emerald-400/10", badge: "bg-emerald-400/15 text-emerald-400 border-emerald-400/20" },
-  email: { icon: Mail, color: "text-blue-400", bg: "bg-blue-400/10", badge: "bg-blue-400/15 text-blue-400 border-blue-400/20" },
-  meeting: { icon: Calendar, color: "text-violet-400", bg: "bg-violet-400/10", badge: "bg-violet-400/15 text-violet-400 border-violet-400/20" },
-  note: { icon: FileText, color: "text-zinc-400", bg: "bg-zinc-400/10", badge: "bg-zinc-400/15 text-zinc-400 border-zinc-400/20" },
+  call: { icon: Phone, color: "text-emerald-600", bg: "bg-emerald-100", badge: "bg-emerald-400/15 text-emerald-600 border-emerald-400/20" },
+  email: { icon: Mail, color: "text-blue-600", bg: "bg-blue-100", badge: "bg-blue-400/15 text-blue-600 border-blue-400/20" },
+  meeting: { icon: Calendar, color: "text-violet-600", bg: "bg-violet-100", badge: "bg-violet-400/15 text-violet-600 border-violet-400/20" },
+  note: { icon: FileText, color: "text-slate-500", bg: "bg-slate-100", badge: "bg-zinc-400/15 text-slate-500 border-zinc-400/20" },
 };
 
 export function ActivitiesFeed({
@@ -142,7 +142,7 @@ export function ActivitiesFeed({
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4 text-muted-foreground" />
               <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v ?? "all")}>
-                <SelectTrigger className="w-[140px] h-9 bg-zinc-800 border-zinc-700">
+                <SelectTrigger className="w-[140px] h-9 bg-slate-100 border-slate-200">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -161,7 +161,7 @@ export function ActivitiesFeed({
                 placeholder="Search subject, body, contact, deal..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 h-9 bg-zinc-800 border-zinc-700"
+                className="pl-9 h-9 bg-slate-100 border-slate-200"
               />
             </div>
 
@@ -171,14 +171,14 @@ export function ActivitiesFeed({
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="h-9 w-[140px] bg-zinc-800 border-zinc-700 text-xs"
+                className="h-9 w-[140px] bg-slate-100 border-slate-200 text-xs"
               />
               <span>To</span>
               <Input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="h-9 w-[140px] bg-zinc-800 border-zinc-700 text-xs"
+                className="h-9 w-[140px] bg-slate-100 border-slate-200 text-xs"
               />
             </div>
 
@@ -191,7 +191,7 @@ export function ActivitiesFeed({
                   </Button>
                 }
               />
-              <DialogContent className="bg-zinc-900 border-zinc-800 max-w-md">
+              <DialogContent className="bg-zinc-900 border-slate-200 max-w-md">
                 <DialogHeader>
                   <DialogTitle>Log Activity</DialogTitle>
                 </DialogHeader>
@@ -199,7 +199,7 @@ export function ActivitiesFeed({
                   <div className="space-y-2">
                     <Label>Type</Label>
                     <Select value={formType} onValueChange={(v) => setFormType(v ?? "call")}>
-                      <SelectTrigger className="bg-zinc-800 border-zinc-700">
+                      <SelectTrigger className="bg-slate-100 border-slate-200">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -217,7 +217,7 @@ export function ActivitiesFeed({
                       value={formSubject}
                       onChange={(e) => setFormSubject(e.target.value)}
                       placeholder="Brief description"
-                      className="bg-zinc-800 border-zinc-700"
+                      className="bg-slate-100 border-slate-200"
                     />
                   </div>
 
@@ -228,7 +228,7 @@ export function ActivitiesFeed({
                       onChange={(e) => setFormBody(e.target.value)}
                       placeholder="Details..."
                       rows={3}
-                      className="bg-zinc-800 border-zinc-700 resize-none"
+                      className="bg-slate-100 border-slate-200 resize-none"
                     />
                   </div>
 
@@ -236,7 +236,7 @@ export function ActivitiesFeed({
                     <div className="space-y-2">
                       <Label>Contact</Label>
                       <Select value={formContactId} onValueChange={(v) => setFormContactId(v ?? "")}>
-                        <SelectTrigger className="bg-zinc-800 border-zinc-700">
+                        <SelectTrigger className="bg-slate-100 border-slate-200">
                           <SelectValue placeholder="None" />
                         </SelectTrigger>
                         <SelectContent>
@@ -253,7 +253,7 @@ export function ActivitiesFeed({
                     <div className="space-y-2">
                       <Label>Deal</Label>
                       <Select value={formDealId} onValueChange={(v) => setFormDealId(v ?? "")}>
-                        <SelectTrigger className="bg-zinc-800 border-zinc-700">
+                        <SelectTrigger className="bg-slate-100 border-slate-200">
                           <SelectValue placeholder="None" />
                         </SelectTrigger>
                         <SelectContent>
@@ -274,7 +274,7 @@ export function ActivitiesFeed({
                       type="datetime-local"
                       value={formDate}
                       onChange={(e) => setFormDate(e.target.value)}
-                      className="bg-zinc-800 border-zinc-700"
+                      className="bg-slate-100 border-slate-200"
                     />
                   </div>
 
@@ -310,7 +310,7 @@ export function ActivitiesFeed({
       ) : (
         <div className="relative pl-8">
           {/* Vertical timeline line */}
-          <div className="absolute left-3 top-2 bottom-2 w-px bg-zinc-800" />
+          <div className="absolute left-3 top-2 bottom-2 w-px bg-slate-100" />
 
           <div className="space-y-3">
             {filtered.map((a) => {
@@ -331,7 +331,7 @@ export function ActivitiesFeed({
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0 flex-1 space-y-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm text-zinc-100">
+                            <span className="font-medium text-sm text-slate-900">
                               {a.subject || `${a.type.charAt(0).toUpperCase() + a.type.slice(1)} logged`}
                             </span>
                             <Badge
@@ -352,7 +352,7 @@ export function ActivitiesFeed({
                             {a.contactName && a.contactId && (
                               <Link
                                 href={`/contacts/${a.contactId}`}
-                                className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
+                                className="text-xs text-blue-600 hover:text-blue-500 hover:underline"
                               >
                                 {a.contactName}
                               </Link>
@@ -363,7 +363,7 @@ export function ActivitiesFeed({
                             {a.dealName && a.dealId && (
                               <Link
                                 href={`/deals/${a.dealId}`}
-                                className="text-xs text-emerald-400 hover:text-emerald-300 hover:underline"
+                                className="text-xs text-emerald-600 hover:text-emerald-300 hover:underline"
                               >
                                 {a.dealName}
                               </Link>

@@ -125,7 +125,7 @@ export function EnrichButton({ contactId }: { contactId: number }) {
             </DialogDescription>
           </DialogHeader>
           {errors.length > 0 && (
-            <div className="rounded-md bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-400 space-y-1">
+            <div className="rounded-md bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-600 space-y-1">
               <p className="font-medium">Errors:</p>
               {errors.map((err, i) => (
                 <p key={i}>{err}</p>
@@ -151,11 +151,11 @@ export function EnrichButton({ contactId }: { contactId: number }) {
                     {FIELD_LABELS[field] || field}
                   </p>
                   <div className="flex items-center gap-2 text-sm">
-                    <span className="text-red-400 line-through">
+                    <span className="text-red-600 line-through">
                       {val.old || "(empty)"}
                     </span>
                     <span className="text-muted-foreground">&rarr;</span>
-                    <span className="text-emerald-400">{val.new}</span>
+                    <span className="text-emerald-600">{val.new}</span>
                   </div>
                 </div>
               ))}

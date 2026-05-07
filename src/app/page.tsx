@@ -59,29 +59,29 @@ export default async function DashboardPage() {
       label: "Total Contacts",
       value: totalContacts.value,
       icon: Users,
-      color: "text-blue-400",
-      bg: "bg-blue-400/10",
+      color: "text-blue-600",
+      bg: "bg-blue-100",
     },
     {
       label: "Active Deals",
       value: activeDeals.value,
       icon: Building2,
-      color: "text-emerald-400",
-      bg: "bg-emerald-400/10",
+      color: "text-emerald-600",
+      bg: "bg-emerald-100",
     },
     {
       label: "Activities This Week",
       value: activitiesThisWeek.value,
       icon: Activity,
-      color: "text-amber-400",
-      bg: "bg-amber-400/10",
+      color: "text-amber-600",
+      bg: "bg-amber-100",
     },
     {
       label: "Deals This Month",
       value: dealsThisMonth.value,
       icon: TrendingUp,
-      color: "text-violet-400",
-      bg: "bg-violet-400/10",
+      color: "text-violet-600",
+      bg: "bg-violet-100",
     },
   ];
 
@@ -147,10 +147,10 @@ export default async function DashboardPage() {
               {recentActivities.map((a) => {
                 const Icon = activityIcons[a.type] ?? Activity;
                 const typeColors: Record<string, string> = {
-                  call: "text-blue-400 bg-blue-400/10",
-                  email: "text-amber-400 bg-amber-400/10",
-                  meeting: "text-emerald-400 bg-emerald-400/10",
-                  note: "text-violet-400 bg-violet-400/10",
+                  call: "text-blue-600 bg-blue-100",
+                  email: "text-amber-600 bg-amber-100",
+                  meeting: "text-emerald-600 bg-emerald-100",
+                  note: "text-violet-600 bg-violet-100",
                 };
                 const colorClass = typeColors[a.type] ?? "text-muted-foreground bg-muted";
                 const [iconColor, iconBg] = colorClass.split(" ");
@@ -158,13 +158,13 @@ export default async function DashboardPage() {
                 return (
                   <div
                     key={a.id}
-                    className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-zinc-800/50"
+                    className="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-slate-100/50"
                   >
                     <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${iconBg}`}>
                       <Icon className={`h-4 w-4 ${iconColor}`} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-zinc-100">
+                      <p className="truncate text-sm font-medium text-slate-900">
                         {a.subject || `${a.type.charAt(0).toUpperCase() + a.type.slice(1)} logged`}
                       </p>
                       <p className="truncate text-xs text-muted-foreground">
@@ -172,7 +172,7 @@ export default async function DashboardPage() {
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <span className="inline-block rounded bg-zinc-800 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+                      <span className="inline-block rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-500">
                         {a.type}
                       </span>
                       <p className="mt-0.5 text-[11px] text-muted-foreground">
