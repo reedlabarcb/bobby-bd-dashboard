@@ -49,6 +49,16 @@ function pickFirst<T>(...vals: (T | null | undefined)[]): T | null {
   return null;
 }
 
+/**
+ * Coerce a value to a string-or-null. Drops booleans, numbers, objects —
+ * occasionally Claude web_search returns `true` instead of a string for
+ * an unknown field, and shipping that to a TEXT column in SQLite blows
+ * up the PUT.
+ */
+function asString(v: unknown): string | null {
+  return typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
+}
+
 function extractDomain(email: string | null): string | null {
   if (!email) return null;
   const at = email.indexOf("@");
@@ -165,30 +175,32 @@ export async function POST(request: Request) {
     const apifyTitle = apifyHit?.headline ?? apifyHit?.currentRole ?? null;
     const [apifyCity, apifyState] = (apifyHit?.location ?? "").split(",").map((s) => s.trim());
 
-    const email = pickFirst(
+    // All five fields go to TEXT columns — coerce strictly to string|null
+    // so a stray boolean from web_search can never leak into the DB.
+    const email = asString(pickFirst(
       existingEmail,
       hunterFind?.email,
       pdlHit?.email,
       apifyEmail,
       webFindings.findings.email ?? null,
-    );
-    const phone = pickFirst(
+    ));
+    const phone = asString(pickFirst(
       pdlHit?.phone,
       apifyPhone,
       webFindings.findings.phone ?? null,
-    );
-    const title = pickFirst(
+    ));
+    const title = asString(pickFirst(
       pdlHit?.title,
       apifyTitle,
       webFindings.findings.title ?? null,
-    );
-    const li = pickFirst(
+    ));
+    const li = asString(pickFirst(
       linkedinUrl,
       pdlHit?.linkedinUrl,
       webFindings.findings.linkedinUrl ?? null,
-    );
-    const city = pickFirst(pdlHit?.city, apifyCity ?? null, webFindings.findings.city ?? null);
-    const state = pickFirst(pdlHit?.state, apifyState ?? null, webFindings.findings.state ?? null);
+    ));
+    const city = asString(pickFirst(pdlHit?.city, apifyCity ?? null, webFindings.findings.city ?? null));
+    const state = asString(pickFirst(pdlHit?.state, apifyState ?? null, webFindings.findings.state ?? null));
 
     // ─── Email-confidence ──────────────────────────────────────
     let emailConfidence: "verified" | "found-unverified" | "none" = email ? "found-unverified" : "none";

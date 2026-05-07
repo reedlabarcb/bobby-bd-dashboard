@@ -124,8 +124,32 @@ export async function enrichCompany(domain: string): Promise<PDLCompany | null> 
 }
 
 /**
+ * Normalize a company name for fuzzy comparison: lowercased, alphanumeric
+ * tokens of length ≥ 2. Used to filter out PDL hits whose company name
+ * isn't a real match for the search ("J&E Bookkeeping" vs "e-bookkeeping
+ * firm" — different company, similar tokens).
+ */
+function normCompanyTokens(name: string): Set<string> {
+  return new Set(
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9 ]/g, " ")
+      .split(/\s+/)
+      .filter((t) => t.length >= 2 && !STOP_WORDS.has(t)),
+  );
+}
+const STOP_WORDS = new Set([
+  "the", "and", "of", "a", "an", "co", "company", "corp", "corporation",
+  "inc", "incorporated", "llc", "llp", "lp", "ltd", "limited", "group",
+  "holdings", "holding", "partners", "partnership", "associates", "firm",
+]);
+
+/**
  * Find people at a company. Returns up to 10 ranked by seniority signals.
- * Used by find-contacts-for-company.
+ * Filters out results whose `job_company_name` doesn't share the dominant
+ * token with the searched company — PDL's term-search is loose (token
+ * overlap, not phrase match), so "J&E Bookkeeping" can match "e-bookkeeping
+ * firm" without that filter.
  */
 export async function searchPeopleAtCompany(company: string): Promise<PDLPerson[]> {
   const key = getKey();
@@ -148,5 +172,21 @@ export async function searchPeopleAtCompany(company: string): Promise<PDLPerson[
   if (res.status === 404) return [];
   if (!res.ok) throw new Error(`PDL API error: ${res.status}`);
   const json = (await res.json()) as { data?: Array<Record<string, unknown>> };
-  return (json.data ?? []).map(mapPerson);
+  const all = (json.data ?? []).map(mapPerson);
+
+  const wanted = normCompanyTokens(company);
+  if (wanted.size === 0) return all;
+  return all.filter((p) => {
+    if (!p.company) return false;
+    const got = normCompanyTokens(p.company);
+    if (got.size === 0) return false;
+    // require at least 50% token overlap with the smaller set
+    const smaller = wanted.size <= got.size ? wanted : got;
+    let hits = 0;
+    for (const t of smaller) {
+      const other = smaller === wanted ? got : wanted;
+      if (other.has(t)) hits++;
+    }
+    return hits / Math.max(1, smaller.size) >= 0.5;
+  });
 }

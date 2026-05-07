@@ -100,11 +100,21 @@ export function DeepSearchPersonButton({
       // it has the same "never overwrite non-empty" behavior we want.
       // We send a flat updates object; Claude/server-side check for blanks.
       const updates: Record<string, string> = {};
-      if (result.title) updates.title = result.title;
-      if (result.email) updates.email = result.email;
-      if (result.phone) updates.phone = result.phone;
-      if (result.city) updates.city = result.city;
-      if (result.state) updates.state = result.state;
+      // Strict string coercion — server returned data may include
+      // non-string sentinels (e.g. `true`) from web_search that would
+      // blow up a TEXT column write.
+      const asStr = (v: unknown) =>
+        typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
+      const title = asStr(result.title);
+      const email = asStr(result.email);
+      const phone = asStr(result.phone);
+      const city = asStr(result.city);
+      const state = asStr(result.state);
+      if (title) updates.title = title;
+      if (email) updates.email = email;
+      if (phone) updates.phone = phone;
+      if (city) updates.city = city;
+      if (state) updates.state = state;
 
       // Notes append: predicted email + summary go here so the user can review.
       const notesAdditions: string[] = [];
