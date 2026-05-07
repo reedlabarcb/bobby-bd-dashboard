@@ -231,17 +231,37 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
 
+    // Exclusive horizon bands: each tab shows ONLY leases inside its own
+    // window — no cumulative overlap.
+    //   "6"  → end ≤ today + 6mo
+    //   "12" → today + 6mo  < end ≤ today + 12mo
+    //   "24" → today + 12mo < end ≤ today + 24mo
+    //   "all" → everything (any future, any expired)
+    function makeCutoff(months: number) {
+      const c = new Date(now);
+      c.setMonth(c.getMonth() + months);
+      return c;
+    }
+    const upperByTab: Record<string, Date> = {
+      "6": makeCutoff(6),
+      "12": makeCutoff(12),
+      "24": makeCutoff(24),
+    };
+    const lowerByTab: Record<string, Date | null> = {
+      "6": null,
+      "12": makeCutoff(6),
+      "24": makeCutoff(12),
+    };
+
     const list = leases.filter((l) => {
-      // Tab / time horizon — compare actual end date to a calendar cutoff so
-      // "6 months" means on or before the same day 6 months from today, not
-      // just integer month subtraction (which rounds Nov 29 down to 6).
       if (tab !== "all") {
         if (!l.leaseEndDate) return false;
         const end = new Date(l.leaseEndDate + "T00:00:00");
         if (isNaN(end.getTime()) || end < now) return false;
-        const cutoff = new Date(now);
-        cutoff.setMonth(cutoff.getMonth() + parseInt(tab));
-        if (end > cutoff) return false;
+        const upper = upperByTab[tab];
+        const lower = lowerByTab[tab];
+        if (upper && end > upper) return false;
+        if (lower && end <= lower) return false;
       }
 
       // Search
@@ -361,6 +381,8 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
     const cut6 = new Date(today); cut6.setMonth(cut6.getMonth() + 6);
     const cut12 = new Date(today); cut12.setMonth(cut12.getMonth() + 12);
     const cut24 = new Date(today); cut24.setMonth(cut24.getMonth() + 24);
+    // Exclusive bands so the stat cards match the tab filters:
+    //   in6  = 0..6 mo, in12 = 6..12 mo, in24 = 12..24 mo
     let in6 = 0, in12 = 0, in24 = 0, expired = 0;
     for (const l of leases) {
       if (!l.leaseEndDate) continue;
@@ -368,8 +390,8 @@ export function LeasesTable({ leases }: { leases: LeaseRow[] }) {
       if (isNaN(end.getTime())) continue;
       if (end < today) { expired++; continue; }
       if (end <= cut6) in6++;
-      if (end <= cut12) in12++;
-      if (end <= cut24) in24++;
+      else if (end <= cut12) in12++;
+      else if (end <= cut24) in24++;
     }
     return { in6, in12, in24, expired, total: leases.length };
   }, [leases]);
