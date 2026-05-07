@@ -148,7 +148,7 @@ export function HomeImportCard() {
   }
 
   return (
-    <Card className="border-0 bg-zinc-900/60">
+    <Card className="border-0 bg-card">
       <CardHeader>
         <div className="flex items-center gap-2">
           <Upload className="h-4 w-4 text-blue-400" />
@@ -174,7 +174,7 @@ export function HomeImportCard() {
                 className={`flex items-start gap-3 rounded-md border p-2.5 cursor-pointer transition-colors ${
                   selected
                     ? "border-blue-500/50 bg-blue-500/5"
-                    : "border-border bg-zinc-900/40 hover:border-zinc-700"
+                    : "border-border bg-card/80 hover:border-zinc-700"
                 }`}
               >
                 <input

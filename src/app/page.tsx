@@ -109,7 +109,7 @@ export default async function DashboardPage() {
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
-            <Card key={stat.label} className="border-0 bg-zinc-900/60">
+            <Card key={stat.label} className="border-0 bg-card">
               <CardHeader className="flex-row items-center justify-between pb-2">
                 <CardDescription className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   {stat.label}
@@ -132,7 +132,7 @@ export default async function DashboardPage() {
       <HomeImportCard />
 
       {/* Recent Activity */}
-      <Card className="border-0 bg-zinc-900/60">
+      <Card className="border-0 bg-card">
         <CardHeader>
           <CardTitle className="text-base font-medium">Recent Activity</CardTitle>
           <CardDescription>Last 10 activities across all contacts and deals</CardDescription>

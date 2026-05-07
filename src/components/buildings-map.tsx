@@ -340,7 +340,7 @@ export function BuildingsMap({ buildings }: { buildings: BuildingPin[] }) {
 
       {buildings.length === 0 && (
         <div className="pointer-events-none absolute inset-x-0 top-4 z-10 flex justify-center">
-          <div className="pointer-events-auto rounded-lg border border-zinc-700 bg-zinc-900/90 px-5 py-3 text-sm text-zinc-300 shadow-lg backdrop-blur">
+          <div className="pointer-events-auto rounded-lg border border-zinc-700 bg-card/95 px-5 py-3 text-sm text-zinc-300 shadow-lg backdrop-blur">
             <MapPin className="mr-2 inline-block h-4 w-4 text-zinc-500" />
             No buildings have been geocoded yet. Run /api/admin/geocode-buildings.
           </div>
@@ -356,7 +356,7 @@ export function BuildingsMap({ buildings }: { buildings: BuildingPin[] }) {
           className={
             heatmapOn
               ? "bg-blue-600 text-white hover:bg-blue-500 border-0"
-              : "border-zinc-700 bg-zinc-900/80 text-zinc-300 hover:bg-zinc-800 backdrop-blur"
+              : "border-zinc-700 bg-card text-zinc-300 hover:bg-zinc-800 backdrop-blur"
           }
         >
           <Layers className="mr-2 h-4 w-4" />
@@ -370,7 +370,7 @@ export function BuildingsMap({ buildings }: { buildings: BuildingPin[] }) {
           variant="outline"
           size="sm"
           onClick={() => setSidebarOpen((v) => !v)}
-          className="border-zinc-700 bg-zinc-900/80 text-zinc-300 hover:bg-zinc-800 backdrop-blur"
+          className="border-zinc-700 bg-card text-zinc-300 hover:bg-zinc-800 backdrop-blur"
         >
           {sidebarOpen ? <X className="mr-2 h-4 w-4" /> : <Filter className="mr-2 h-4 w-4" />}
           Filters
@@ -384,7 +384,7 @@ export function BuildingsMap({ buildings }: { buildings: BuildingPin[] }) {
 
       {/* Filter sidebar */}
       {sidebarOpen && (
-        <div className="absolute left-4 top-14 z-10 w-64 rounded-lg border border-zinc-700 bg-zinc-900/90 shadow-xl backdrop-blur">
+        <div className="absolute left-4 top-14 z-10 w-64 rounded-lg border border-zinc-700 bg-card/95 shadow-xl backdrop-blur">
           <div className="p-4 space-y-4">
             <div>
               <p className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">
@@ -471,7 +471,7 @@ export function BuildingsMap({ buildings }: { buildings: BuildingPin[] }) {
       )}
 
       {/* Legend */}
-      <div className="absolute bottom-4 left-4 z-10 rounded-lg border border-zinc-700 bg-zinc-900/90 px-3 py-2 text-[11px] text-zinc-300 shadow backdrop-blur">
+      <div className="absolute bottom-4 left-4 z-10 rounded-lg border border-zinc-700 bg-card/95 px-3 py-2 text-[11px] text-zinc-300 shadow backdrop-blur">
         <div className="font-semibold uppercase tracking-wider text-zinc-500 mb-1.5 text-[10px]">
           Next Rollover
         </div>

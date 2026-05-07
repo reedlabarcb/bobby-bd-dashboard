@@ -108,7 +108,7 @@ export function ProbeCompanyCard() {
       {result ? (
         <div className="space-y-3 text-xs mt-3">
           {/* Hunter */}
-          <div className="rounded-md border border-border bg-zinc-900/40 p-3">
+          <div className="rounded-md border border-border bg-card/80 p-3">
             <div className="flex items-center gap-2 mb-2 font-medium">
               {result.hunter?.ok ? (
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
@@ -149,7 +149,7 @@ export function ProbeCompanyCard() {
           </div>
 
           {/* Apollo */}
-          <div className="rounded-md border border-border bg-zinc-900/40 p-3">
+          <div className="rounded-md border border-border bg-card/80 p-3">
             <div className="flex items-center gap-2 mb-2 font-medium">
               {result.apollo?.ok ? (
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />

@@ -136,7 +136,7 @@ export function ActivitiesFeed({
   return (
     <div className="space-y-6">
       {/* Filter Bar */}
-      <Card className="border-0 bg-zinc-900/60">
+      <Card className="border-0 bg-card">
         <CardContent className="pt-4 pb-4">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
@@ -300,7 +300,7 @@ export function ActivitiesFeed({
 
       {/* Timeline */}
       {filtered.length === 0 ? (
-        <Card className="border-0 bg-zinc-900/60">
+        <Card className="border-0 bg-card">
           <CardContent className="py-12 text-center">
             <p className="text-sm text-muted-foreground">
               No activities found. Log your first activity to get started.
@@ -326,7 +326,7 @@ export function ActivitiesFeed({
                     <Icon className={`h-3 w-3 ${config.color}`} />
                   </div>
 
-                  <Card className="border-0 bg-zinc-900/60 hover:bg-zinc-900/80 transition-colors">
+                  <Card className="border-0 bg-card hover:bg-card transition-colors">
                     <CardContent className="py-4 px-5">
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0 flex-1 space-y-1">

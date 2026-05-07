@@ -423,7 +423,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
         {statCards.map((stat) => {
           const Icon = stat.icon;
           return (
-            <Card key={stat.label} className="border-0 bg-zinc-900/60">
+            <Card key={stat.label} className="border-0 bg-card">
               <CardHeader className="flex-row items-center justify-between pb-2">
                 <CardDescription className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                   {stat.label}
@@ -452,7 +452,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
             placeholder="Search documents..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 bg-zinc-900/60 border-zinc-700"
+            className="pl-9 bg-card border-zinc-700"
           />
           {search && (
             <button
@@ -468,7 +468,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
           value={typeFilter}
           onValueChange={(v) => setTypeFilter(v ?? "all")}
         >
-          <SelectTrigger className="w-[160px] bg-zinc-900/60 border-zinc-700">
+          <SelectTrigger className="w-[160px] bg-card border-zinc-700">
             <SelectValue placeholder="Doc Type" />
           </SelectTrigger>
           <SelectContent>
@@ -485,7 +485,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
           value={statusFilter}
           onValueChange={(v) => setStatusFilter(v ?? "all")}
         >
-          <SelectTrigger className="w-[140px] bg-zinc-900/60 border-zinc-700">
+          <SelectTrigger className="w-[140px] bg-card border-zinc-700">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -501,7 +501,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
           value={propTypeFilter}
           onValueChange={(v) => setPropTypeFilter(v ?? "all")}
         >
-          <SelectTrigger className="w-[160px] bg-zinc-900/60 border-zinc-700">
+          <SelectTrigger className="w-[160px] bg-card border-zinc-700">
             <SelectValue placeholder="Property Type" />
           </SelectTrigger>
           <SelectContent>
@@ -519,7 +519,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
 
       {/* Document List */}
       {filtered.length === 0 ? (
-        <Card className="border-0 bg-zinc-900/60">
+        <Card className="border-0 bg-card">
           <CardContent className="flex flex-col items-center justify-center py-16">
             <FileText className="h-12 w-12 text-muted-foreground/40 mb-4" />
             <p className="text-lg font-medium text-muted-foreground">
@@ -576,7 +576,7 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
             return (
               <Card
                 key={doc.id}
-                className="border-0 bg-zinc-900/60 transition-colors hover:bg-zinc-900/80 cursor-pointer"
+                className="border-0 bg-card transition-colors hover:bg-card cursor-pointer"
                 onClick={() =>
                   setExpandedId(isExpanded ? null : doc.id)
                 }
