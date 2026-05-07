@@ -4,7 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format, formatDistanceToNow, parseISO, isAfter, isBefore, startOfDay } from "date-fns";
-import { Phone, Mail, Calendar, FileText, Plus, Search, Filter } from "lucide-react";
+import { Phone, Mail, Calendar, FileText, Plus, Search, Filter, Pencil } from "lucide-react";
+import { GenericEditDialog } from "@/components/generic-edit-dialog";
 import { toast } from "sonner";
 
 import { Card, CardContent } from "@/components/ui/card";
@@ -317,80 +318,113 @@ export function ActivitiesFeed({
               const config = typeConfig[a.type] ?? typeConfig.note;
               const Icon = config.icon;
 
-              return (
-                <div key={a.id} className="relative">
-                  {/* Timeline dot */}
-                  <div
-                    className={`absolute -left-8 top-4 flex h-6 w-6 items-center justify-center rounded-full ${config.bg} ring-4 ring-zinc-950`}
-                  >
-                    <Icon className={`h-3 w-3 ${config.color}`} />
-                  </div>
-
-                  <Card className="border-0 bg-card hover:bg-card transition-colors">
-                    <CardContent className="py-4 px-5">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm text-slate-900">
-                              {a.subject || `${a.type.charAt(0).toUpperCase() + a.type.slice(1)} logged`}
-                            </span>
-                            <Badge
-                              variant="outline"
-                              className={`text-[10px] uppercase tracking-wider border ${config.badge}`}
-                            >
-                              {a.type}
-                            </Badge>
-                          </div>
-
-                          {a.body && (
-                            <p className="text-xs text-muted-foreground leading-relaxed">
-                              {a.body.length > 200 ? a.body.slice(0, 200) + "..." : a.body}
-                            </p>
-                          )}
-
-                          <div className="flex items-center gap-3 pt-1">
-                            {a.contactName && a.contactId && (
-                              <Link
-                                href={`/contacts/${a.contactId}`}
-                                className="text-xs text-blue-600 hover:text-blue-500 hover:underline"
-                              >
-                                {a.contactName}
-                              </Link>
-                            )}
-                            {a.contactName && a.dealName && (
-                              <span className="text-xs text-zinc-600">/</span>
-                            )}
-                            {a.dealName && a.dealId && (
-                              <Link
-                                href={`/deals/${a.dealId}`}
-                                className="text-xs text-emerald-600 hover:text-emerald-300 hover:underline"
-                              >
-                                {a.dealName}
-                              </Link>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="shrink-0 text-right">
-                          {a.date && (
-                            <>
-                              <p className="text-xs text-muted-foreground">
-                                {formatDistanceToNow(parseISO(a.date), { addSuffix: true })}
-                              </p>
-                              <p className="text-[10px] text-zinc-600 mt-0.5">
-                                {format(parseISO(a.date), "MMM d, yyyy h:mm a")}
-                              </p>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              );
+              return <ActivityRow key={a.id} a={a} config={config} Icon={Icon} />;
             })}
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+function ActivityRow({
+  a,
+  config,
+  Icon,
+}: {
+  a: ActivityItem;
+  config: { icon: typeof Phone; color: string; bg: string; badge: string };
+  Icon: typeof Phone;
+}) {
+  const [editing, setEditing] = useState(false);
+  return (
+    <div className="relative">
+      <div
+        className={`absolute -left-8 top-4 flex h-6 w-6 items-center justify-center rounded-full ${config.bg} ring-4 ring-zinc-950`}
+      >
+        <Icon className={`h-3 w-3 ${config.color}`} />
+      </div>
+      <Card className="border-0 bg-card hover:bg-card transition-colors">
+        <CardContent className="py-4 px-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-sm text-slate-900">
+                  {a.subject || `${a.type.charAt(0).toUpperCase() + a.type.slice(1)} logged`}
+                </span>
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] uppercase tracking-wider border ${config.badge}`}
+                >
+                  {a.type}
+                </Badge>
+              </div>
+              {a.body && (
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {a.body.length > 200 ? a.body.slice(0, 200) + "..." : a.body}
+                </p>
+              )}
+              <div className="flex items-center gap-3 pt-1">
+                {a.contactName && a.contactId && (
+                  <Link
+                    href={`/contacts/${a.contactId}`}
+                    className="text-xs text-blue-600 hover:text-blue-500 hover:underline"
+                  >
+                    {a.contactName}
+                  </Link>
+                )}
+                {a.contactName && a.dealName && (
+                  <span className="text-xs text-zinc-600">/</span>
+                )}
+                {a.dealName && a.dealId && (
+                  <Link
+                    href={`/deals/${a.dealId}`}
+                    className="text-xs text-emerald-600 hover:text-emerald-300 hover:underline"
+                  >
+                    {a.dealName}
+                  </Link>
+                )}
+              </div>
+            </div>
+            <div className="shrink-0 text-right flex flex-col items-end gap-1">
+              {a.date && (
+                <>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDistanceToNow(parseISO(a.date), { addSuffix: true })}
+                  </p>
+                  <p className="text-[10px] text-zinc-600 mt-0.5">
+                    {format(parseISO(a.date), "MMM d, yyyy h:mm a")}
+                  </p>
+                </>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-1.5 mt-1"
+                onClick={() => setEditing(true)}
+                title="Edit activity"
+              >
+                <Pencil className="size-3" />
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      {editing && (
+        <GenericEditDialog
+          open={editing}
+          onOpenChange={setEditing}
+          resource="Activity"
+          endpoint={`/api/activities/${a.id}`}
+          row={a as unknown as Record<string, unknown>}
+          preview={a.subject || `${a.type} on ${a.date ? format(parseISO(a.date), "MMM d, yyyy") : "?"}`}
+          fields={[
+            { key: "type", label: "Type", type: "select", options: ["call", "email", "meeting", "note"] },
+            { key: "subject", label: "Subject", type: "text", full: true },
+            { key: "body", label: "Body", type: "textarea", full: true },
+            { key: "date", label: "Date (YYYY-MM-DD HH:MM:SS)", type: "text", full: true },
+          ]}
+        />
       )}
     </div>
   );

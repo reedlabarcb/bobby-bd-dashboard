@@ -24,6 +24,7 @@ import {
   AlertCircle,
   Clock,
   X,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,6 +44,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { GenericEditDialog } from "@/components/generic-edit-dialog";
 import {
   Tooltip,
   TooltipTrigger,
@@ -128,6 +130,46 @@ function StatusBadge({ status }: { status: string | null }) {
       {status === "pending" && <Clock className="h-3 w-3" />}
       {c.label}
     </span>
+  );
+}
+
+function DocumentEditButton({ doc }: { doc: Document }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-7 px-2 text-xs"
+        onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+      >
+        <Pencil className="size-3 mr-1" />
+        Edit / Delete
+      </Button>
+      {open && (
+        <GenericEditDialog
+          open={open}
+          onOpenChange={setOpen}
+          resource="Document"
+          endpoint={`/api/documents/${doc.id}`}
+          row={doc as unknown as Record<string, unknown>}
+          preview={doc.filename}
+          fields={[
+            { key: "filename", label: "Filename", type: "text", full: true },
+            { key: "documentType", label: "Doc type", type: "select", options: ["om", "rent_roll", "lease_abstract", "market_report", "other"] },
+            { key: "status", label: "Status", type: "select", options: ["pending", "processing", "done", "error"] },
+            { key: "propertyName", label: "Property name", type: "text" },
+            { key: "propertyAddress", label: "Property address", type: "text" },
+            { key: "propertyCity", label: "City", type: "text" },
+            { key: "propertyState", label: "State", type: "text" },
+            { key: "propertyType", label: "Property type", type: "text" },
+            { key: "askingPrice", label: "Asking price", type: "number" },
+            { key: "aiSummary", label: "AI summary", type: "textarea", full: true },
+            { key: "errorMessage", label: "Error message", type: "textarea", full: true },
+          ]}
+        />
+      )}
+    </>
   );
 }
 
@@ -821,6 +863,14 @@ export function DocumentLibrary({ documents: docs, stats }: DocumentLibraryProps
                           </a>
                         </div>
                       )}
+
+                      {/* Edit/Delete */}
+                      <div
+                        className="flex items-center justify-end gap-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <DocumentEditButton doc={doc} />
+                      </div>
 
                       {/* Error message + reprocess */}
                       {doc.status === "error" && (
