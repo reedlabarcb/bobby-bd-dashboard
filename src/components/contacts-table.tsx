@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { FindContactsButton } from "@/components/find-contacts-button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -549,7 +550,22 @@ export function ContactsTable({
                     {c.title || "-"}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs">
-                    {c.email || "-"}
+                    {c.email ? (
+                      c.email
+                    ) : c.company ? (
+                      <span onClick={(e) => e.stopPropagation()} className="inline-block">
+                        <FindContactsButton
+                          company={c.company}
+                          city={c.city ?? undefined}
+                          state={c.state ?? undefined}
+                          size="sm"
+                          variant="ghost"
+                          label="Find Email"
+                        />
+                      </span>
+                    ) : (
+                      "-"
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs">
                     {c.phone || c.mobilePhone || c.directPhone || "-"}

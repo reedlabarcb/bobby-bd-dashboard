@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { FindContactsButton } from "@/components/find-contacts-button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -979,13 +980,25 @@ function LeaseRowGroup({
                       At {l.tenantName}
                     </p>
                     {l.tenantContacts.length === 0 ? (
-                      <a
-                        href={`/contacts?view=company&search=${encodeURIComponent(l.tenantName)}`}
+                      <div
+                        className="flex items-center gap-2 flex-wrap"
                         onClick={(e) => e.stopPropagation()}
-                        className="text-xs text-blue-600 hover:text-blue-500"
                       >
-                        + Add a contact at this tenant →
-                      </a>
+                        <FindContactsButton
+                          company={l.tenantName}
+                          city={l.propertyCity ?? undefined}
+                          state={l.propertyState ?? undefined}
+                          size="sm"
+                          variant="outline"
+                          label="Find People"
+                        />
+                        <a
+                          href={`/contacts?view=company&search=${encodeURIComponent(l.tenantName)}`}
+                          className="text-xs text-blue-600 hover:text-blue-500"
+                        >
+                          add manually →
+                        </a>
+                      </div>
                     ) : (
                       <div className="space-y-1">
                         {l.tenantContacts.slice(0, 4).map((c) => (

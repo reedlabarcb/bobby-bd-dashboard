@@ -134,7 +134,7 @@ export function ContactsByCompany({
     email: string | null;
     phone: string | null;
     linkedinUrl: string | null;
-    source: "hunter" | "web_search";
+    source: "hunter" | "apollo" | "pdl" | "web_search";
     confidence: number;
   };
   const [findingFor, setFindingFor] = useState<string | null>(null);
@@ -541,12 +541,20 @@ export function ContactsByCompany({
                                     <Badge
                                       className={
                                         c.source === "hunter"
-                                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30 text-[10px]"
-                                          : "bg-blue-500/20 text-blue-500 border-blue-500/30 text-[10px]"
+                                          ? "bg-blue-100 text-blue-700 border-blue-200 text-[10px]"
+                                          : c.source === "apollo"
+                                          ? "bg-violet-100 text-violet-700 border-violet-200 text-[10px]"
+                                          : c.source === "pdl"
+                                          ? "bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px]"
+                                          : "bg-amber-100 text-amber-700 border-amber-200 text-[10px]"
                                       }
                                     >
                                       {c.source === "hunter"
                                         ? `Hunter${c.confidence ? ` ${c.confidence}%` : ""}`
+                                        : c.source === "apollo"
+                                        ? "Apollo"
+                                        : c.source === "pdl"
+                                        ? "PDL"
                                         : "Web search"}
                                     </Badge>
                                   </div>

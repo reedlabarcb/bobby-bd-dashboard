@@ -1,15 +1,19 @@
 import { db } from "@/lib/db";
 import { contacts, contactEnrichments } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { enrichContact as apolloEnrich, searchPeople } from "@/lib/api/apollo";
+import {
+  searchPeople as apolloSearchPeople,
+  searchOrganization as apolloSearchOrg,
+  ApolloFreeTierError,
+} from "@/lib/api/apollo";
 import { domainSearch, findEmail, verifyEmail } from "@/lib/api/hunter";
 import { scrapeLinkedIn } from "@/lib/api/apify";
+import { enrichPerson as pdlEnrichPerson } from "@/lib/api/pdl";
 import { synthesizeContactInfo } from "@/lib/api/anthropic";
 import { NextResponse } from "next/server";
 
 // Loose name match: fold case + diacritics + trim, then check that all
-// last-name tokens appear in the candidate's full name. This handles
-// "Hanna" vs "John Hanna" and "Susan Green" vs "Green, Susan".
+// last-name tokens appear in the candidate's full name.
 function namesMatch(target: string, candidateFirst: string | null, candidateLast: string | null): boolean {
   const candidate = [candidateFirst, candidateLast].filter(Boolean).join(" ").toLowerCase().trim();
   if (!candidate) return false;
@@ -44,39 +48,77 @@ export async function POST(request: Request) {
 
     const enrichmentResults: Record<string, unknown>[] = [];
     const errors: string[] = [];
-    const notFound: string[] = []; // expected misses (no data found), not failures
+    const notFound: string[] = []; // expected misses, not failures
 
-    // LinkedIn URLs from the prospecting-sheet importer land in `notes`. Pull
-    // it out as the strongest signal we have — it's a person-specific URL that
-    // already maps to this contact, no fuzzy matching needed.
+    // LinkedIn URL embedded in notes is a person-specific signal we trust.
     const linkedinFromNotes = contact.notes?.match(
       /linkedin\.com\/in\/[A-Za-z0-9_-]+\/?/i,
     )?.[0];
     const linkedinFullUrl = linkedinFromNotes ? `https://www.${linkedinFromNotes}` : null;
 
-    // Step 1: Apify LinkedIn scrape — runs first when we already have a LinkedIn
-    // URL on the contact. LinkedIn has the most reliable title + company data
-    // and bypasses the Hunter coverage problem entirely. Skipped silently if
-    // APIFY_API_KEY isn't configured.
-    let apifyData: Record<string, unknown> | null = null;
-    if (linkedinFullUrl && process.env.APIFY_API_KEY) {
+    // ─────────────────────────────────────────────────────────────
+    // PIPELINE ORDER (v2):
+    //   1. Apollo search (name + company, free-tier endpoint)
+    //   2. Hunter domain-search
+    //   3. Hunter find-email / verify-email
+    //   4. PDL enrichPerson (only if 1+2+3 missed email/phone)
+    //   5. Apify LinkedIn (only if a LinkedIn URL exists)
+    //   6. Claude synthesizeContactInfo (always last, fills blanks)
+    // ─────────────────────────────────────────────────────────────
+
+    // Step 1: Apollo search by name + company (free-tier).
+    let apolloHit: Record<string, unknown> | null = null;
+    let apolloOrgDomain: string | null = null;
+    if (process.env.APOLLO_API_KEY) {
       try {
-        apifyData = await scrapeLinkedIn(linkedinFullUrl);
-        saveEnrichment(contactId, "apify", apifyData);
-        enrichmentResults.push({ source: "apify", data: apifyData });
+        const result = await apolloSearchPeople({
+          name: contact.name,
+          company: contact.company || undefined,
+          city: contact.city || undefined,
+        });
+        const people = (result.people as Array<Record<string, unknown>> | undefined) ?? [];
+        if (people.length > 0) {
+          apolloHit = people[0];
+          saveEnrichment(contactId, "apollo", apolloHit);
+          enrichmentResults.push({ source: "apollo", data: apolloHit });
+        } else {
+          notFound.push(`Apollo: no people found for "${contact.name}" at "${contact.company}"`);
+        }
       } catch (e) {
-        errors.push(`Apify: ${e instanceof Error ? e.message : "failed"}`);
+        if (e instanceof ApolloFreeTierError) {
+          notFound.push("Apollo free tier limited (skipping people-search)");
+        } else {
+          errors.push(`Apollo: ${e instanceof Error ? e.message : "failed"}`);
+        }
       }
+
+      // Org-search fallback to find a domain we can hand to Hunter.
+      if (contact.company && !apolloOrgDomain) {
+        try {
+          const org = await apolloSearchOrg(contact.company);
+          if (org?.domain) {
+            apolloOrgDomain = org.domain;
+            enrichmentResults.push({ source: "apollo-org", data: org });
+          }
+        } catch (e) {
+          if (!(e instanceof ApolloFreeTierError)) {
+            errors.push(`Apollo org-search: ${e instanceof Error ? e.message : "failed"}`);
+          }
+        }
+      }
+    } else {
+      notFound.push("Apollo not configured");
     }
 
-    // Step 2a: Hunter domain-search — pull the full org email list and
-    // match by name. This is the highest-yield Hunter call when Apollo's
-    // free-tier search returns redacted records (which it usually does).
+    // Step 2: Hunter domain-search — try with Apollo's discovered domain
+    // first, fall back to company name (Hunter's own domain inference).
     let hunterDomainHit: Record<string, unknown> | null = null;
     if (contact.company && process.env.HUNTER_API_KEY) {
       try {
         const ds = await domainSearch(
-          { company: contact.company },
+          apolloOrgDomain
+            ? { domain: apolloOrgDomain }
+            : { company: contact.company },
           { limit: 100, onlyPersonal: true },
         );
         const match = ds.emails.find((e) =>
@@ -94,8 +136,6 @@ export async function POST(request: Request) {
           saveEnrichment(contactId, "hunter-domain", hunterDomainHit);
           enrichmentResults.push({ source: "hunter-domain", data: hunterDomainHit });
         } else if (ds.emails.length === 0) {
-          // No data in Hunter's index for this domain — common for smaller
-          // private companies. Not an error, just a miss.
           notFound.push(
             `Hunter has no email index for ${ds.organization || contact.company}${ds.domain ? ` (${ds.domain})` : ""}`,
           );
@@ -107,95 +147,112 @@ export async function POST(request: Request) {
       } catch (e) {
         errors.push(`Hunter domain-search: ${e instanceof Error ? e.message : "failed"}`);
       }
+    } else if (!process.env.HUNTER_API_KEY) {
+      notFound.push("Hunter not configured");
     }
 
-    // Step 2b: Hunter find-email or verify. Skip if domain-search already
-    // found this person — the domain hit has the email already.
-    try {
-      if (!hunterDomainHit && !contact.email && contact.company) {
-        const hunterData = await findEmail(contact.name, {
-          company: contact.company,
-        });
-        saveEnrichment(contactId, "hunter", hunterData);
-        enrichmentResults.push({ source: "hunter", data: hunterData });
-      } else if (contact.email) {
-        const verification = await verifyEmail(contact.email);
-        saveEnrichment(contactId, "hunter", verification);
-        enrichmentResults.push({ source: "hunter", data: verification });
-      }
-    } catch (e) {
-      errors.push(`Hunter: ${e instanceof Error ? e.message : "failed"}`);
-    }
-
-    // Step 3: Apollo — last-resort fallback. Often 403s on free-tier search
-    // (mixed_people/search requires paid plan now). If we already have a
-    // hit from Apify or Hunter, skip to save the credit.
-    if (!apifyData && !hunterDomainHit) {
+    // Step 3: Hunter find-email / verify-email — fallback if domain-search
+    // didn't get a name match but we still don't have an email.
+    let hunterFindHit: { email?: string; score?: number } | null = null;
+    if (process.env.HUNTER_API_KEY) {
       try {
-        let apolloData: Record<string, unknown> = {};
-        if (contact.email) {
-          apolloData = await apolloEnrich(contact.email);
-        } else {
-          apolloData = await searchPeople({
-            name: contact.name,
-            company: contact.company || undefined,
-            city: contact.city || undefined,
-            linkedinUrl: linkedinFullUrl || undefined,
+        if (!hunterDomainHit && !contact.email && contact.company) {
+          const hunterData = await findEmail(contact.name, {
+            company: contact.company,
           });
+          hunterFindHit = hunterData as { email?: string; score?: number };
+          saveEnrichment(contactId, "hunter", hunterData);
+          enrichmentResults.push({ source: "hunter", data: hunterData });
+        } else if (contact.email) {
+          const verification = await verifyEmail(contact.email);
+          saveEnrichment(contactId, "hunter", verification);
+          enrichmentResults.push({ source: "hunter", data: verification });
         }
-        saveEnrichment(contactId, "apollo", apolloData);
-        enrichmentResults.push({ source: "apollo", data: apolloData });
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "failed";
-        // Apollo free-tier search returns 403 — known limitation, not a bug.
-        if (msg.includes("403")) {
-          notFound.push("Apollo people-search requires paid tier (free-tier returns 403)");
-        } else {
-          errors.push(`Apollo: ${msg}`);
-        }
+        errors.push(`Hunter find-email: ${e instanceof Error ? e.message : "failed"}`);
       }
     }
 
-    // Step 4: build deterministic updates from the strongest signals first.
-    // Claude only refines / adds a summary on top — we don't gate the diff
-    // on Claude succeeding, so a transient Anthropic failure doesn't kill
-    // an otherwise-good Hunter hit.
+    // Step 4: PDL enrichPerson — only if Apollo and Hunter didn't yield
+    // an email or phone yet. Conservative — PDL free tier is 100/mo.
+    const haveEmail =
+      contact.email ||
+      (hunterDomainHit?.email as string | undefined) ||
+      hunterFindHit?.email ||
+      (apolloHit?.email as string | undefined);
+    const havePhone =
+      contact.phone ||
+      (hunterDomainHit?.phone as string | undefined) ||
+      (apolloHit?.organization_phone as string | undefined);
+    let pdlHit: Awaited<ReturnType<typeof pdlEnrichPerson>> | null = null;
+    if (!haveEmail || !havePhone) {
+      if (process.env.PDL_API_KEY && contact.company) {
+        try {
+          pdlHit = await pdlEnrichPerson(
+            contact.name,
+            contact.company,
+            contact.email || undefined,
+          );
+          if (pdlHit) {
+            saveEnrichment(contactId, "pdl", pdlHit);
+            enrichmentResults.push({ source: "pdl", data: pdlHit });
+          } else {
+            notFound.push(`PDL: no match for "${contact.name}" at "${contact.company}"`);
+          }
+        } catch (e) {
+          errors.push(`PDL: ${e instanceof Error ? e.message : "failed"}`);
+        }
+      } else if (!process.env.PDL_API_KEY) {
+        notFound.push("PDL not configured");
+      }
+    }
+
+    // Step 5: Apify LinkedIn — only when a LinkedIn URL is on the contact.
+    let apifyHit: Awaited<ReturnType<typeof scrapeLinkedIn>> | null = null;
+    if (linkedinFullUrl) {
+      if (process.env.APIFY_API_KEY) {
+        try {
+          apifyHit = await scrapeLinkedIn(linkedinFullUrl);
+          saveEnrichment(contactId, "apify", apifyHit);
+          enrichmentResults.push({ source: "apify", data: apifyHit });
+        } catch (e) {
+          errors.push(`Apify: ${e instanceof Error ? e.message : "failed"}`);
+        }
+      } else {
+        notFound.push("Apify not configured (have LinkedIn URL but can't scrape)");
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Build deterministic updates from strongest signals first.
+    // Rule: never overwrite a non-empty existing field.
+    // ─────────────────────────────────────────────────────────────
     const updates: Record<string, string> = {};
 
     function setIfBetter(field: string, value: string | null | undefined) {
       if (!value) return;
       const current = (contact as unknown as Record<string, string | null>)[field];
-      if (current && current.length > 0) return; // never overwrite existing data here
+      if (current && current.length > 0) return;
       updates[field] = value;
     }
 
-    // Apify (LinkedIn scrape) wins for title/location since LinkedIn is the
-    // authoritative source for those.
-    if (apifyData) {
-      const headline = (apifyData.headline as string | undefined)
-        || (apifyData.position as string | undefined)
-        || (apifyData.jobTitle as string | undefined);
-      const location = apifyData.location as string | undefined;
-      const summary = apifyData.summary as string | undefined;
-      setIfBetter("title", headline ?? null);
-      if (location) {
-        const [city, state] = location.split(",").map((s) => s.trim());
+    // Apify (LinkedIn) wins for title/location — LinkedIn is authoritative.
+    if (apifyHit) {
+      setIfBetter("title", apifyHit.headline ?? apifyHit.currentRole);
+      if (apifyHit.location) {
+        const [city, state] = apifyHit.location.split(",").map((s) => s.trim());
         setIfBetter("city", city ?? null);
         setIfBetter("state", state ?? null);
       }
-      if (summary && !(contact.notes || "").includes(summary.slice(0, 30))) {
-        const prefix = contact.notes ? `${contact.notes}\n\n` : "";
-        updates.notes = `${prefix}Bio: ${summary.slice(0, 500)}`;
-      }
-      // Apify rarely returns email/phone but try anyway.
-      setIfBetter("email", (apifyData.email as string | undefined) ?? null);
+      setIfBetter("email", apifyHit.email);
+      setIfBetter("phone", apifyHit.phone);
     }
 
+    // Hunter domain-search hit — verified email + position from the company.
     if (hunterDomainHit) {
       setIfBetter("email", hunterDomainHit.email as string | null);
       setIfBetter("phone", hunterDomainHit.phone as string | null);
       setIfBetter("title", hunterDomainHit.position as string | null);
-      // Stash LinkedIn into notes if not already there.
       const li = hunterDomainHit.linkedin as string | null;
       if (li && !(contact.notes || "").includes(li)) {
         const prefix = contact.notes ? `${contact.notes}\n` : "";
@@ -203,14 +260,30 @@ export async function POST(request: Request) {
       }
     }
 
-    // Pull anything else Hunter findEmail / Apollo gave us.
-    const hunterFind = enrichmentResults.find((r) => r.source === "hunter")?.data as
-      | { email?: string | null; score?: number }
-      | undefined;
-    if (hunterFind?.email && (hunterFind.score ?? 0) >= 50) {
-      setIfBetter("email", hunterFind.email);
+    if (hunterFindHit?.email && (hunterFindHit.score ?? 0) >= 50) {
+      setIfBetter("email", hunterFindHit.email);
     }
 
+    // PDL (after the verified Hunter email/phone, since PDL data can be older).
+    if (pdlHit) {
+      setIfBetter("email", pdlHit.email);
+      setIfBetter("phone", pdlHit.phone);
+      setIfBetter("title", pdlHit.title);
+      setIfBetter("city", pdlHit.city);
+      setIfBetter("state", pdlHit.state);
+    }
+
+    // Apollo person hit (free-tier records are partial / often redacted).
+    if (apolloHit) {
+      setIfBetter("title", apolloHit.title as string | null);
+      setIfBetter(
+        "city",
+        ((apolloHit.city as string | undefined) ??
+          (apolloHit.present_raw_address as string | undefined)) ?? null,
+      );
+    }
+
+    // Step 6: Claude — synthesize a summary + fill any remaining gaps.
     let summary = "";
     try {
       if (process.env.ANTHROPIC_API_KEY) {
@@ -220,8 +293,6 @@ export async function POST(request: Request) {
           enrichmentResults,
         );
         saveEnrichment(contactId, "claude", synthesis);
-        // Claude can fill in fields we still don't have, but never overwrites
-        // what we already chose deterministically above.
         for (const [k, v] of Object.entries(synthesis.updates || {})) {
           if (v && !updates[k]) {
             const current = (contact as unknown as Record<string, string | null>)[k];
@@ -236,7 +307,7 @@ export async function POST(request: Request) {
       errors.push(`Claude: ${e instanceof Error ? e.message : "failed"}`);
     }
 
-    // Build diff of what would change
+    // Build diff of what would change.
     const diff: Record<string, { old: string | null; new: string }> = {};
     for (const [key, value] of Object.entries(updates)) {
       if (value && value !== (contact as unknown as Record<string, string>)[key]) {
@@ -247,9 +318,8 @@ export async function POST(request: Request) {
       }
     }
     if (summary) {
-      // Strip any existing "AI Summary:" block (and the separator above it)
-      // before appending the new one — re-enriching shouldn't pile up
-      // duplicate summaries in the notes field.
+      // Strip any existing "AI Summary:" block before appending the new
+      // one — re-enriching shouldn't pile up duplicate summaries.
       const baseNotes = (contact.notes || "")
         .replace(/\s*(?:\n?---\n)?\s*AI Summary:[\s\S]*$/, "")
         .trimEnd();
@@ -259,8 +329,7 @@ export async function POST(request: Request) {
       };
     }
 
-    // Bulk mode: apply the diff immediately and return what was applied. Used
-    // by the /enrich bulk runner so we don't need a per-contact PUT roundtrip.
+    // Bulk mode: apply the diff immediately and return what was applied.
     let applied = false;
     if (autoApply && Object.keys(diff).length > 0) {
       const updateValues: Record<string, string> = {};
@@ -275,11 +344,17 @@ export async function POST(request: Request) {
       applied = true;
     }
 
-    return NextResponse.json({ diff, applied, errors, notFound, enrichmentCount: enrichmentResults.length });
+    return NextResponse.json({
+      diff,
+      applied,
+      errors,
+      notFound,
+      enrichmentCount: enrichmentResults.length,
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Enrichment failed" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -305,7 +380,7 @@ export async function PUT(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Failed to apply updates" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
