@@ -124,18 +124,22 @@ export async function enrichCompany(domain: string): Promise<PDLCompany | null> 
 }
 
 /**
- * Normalize a company name for fuzzy comparison: lowercased, alphanumeric
- * tokens of length ≥ 2. Used to filter out PDL hits whose company name
- * isn't a real match for the search ("J&E Bookkeeping" vs "e-bookkeeping
- * firm" — different company, similar tokens).
+ * Normalize a company name for fuzzy comparison.
+ *
+ * Split on WHITESPACE only — internal punctuation ("&", "-", ".") is
+ * stripped INSIDE the token so brand abbreviations stay intact:
+ *   "J&E Bookkeeping"   → ["je", "bookkeeping"]
+ *   "e-bookkeeping firm" → ["ebookkeeping"]   (firm is a stop word)
+ * Without this, "J&E" would split into `j` + `e` (both filtered as
+ * length<2) and any company with the word "bookkeeping" would match.
  */
 function normCompanyTokens(name: string): Set<string> {
   return new Set(
     name
       .toLowerCase()
-      .replace(/[^a-z0-9 ]/g, " ")
       .split(/\s+/)
-      .filter((t) => t.length >= 2 && !STOP_WORDS.has(t)),
+      .map((t) => t.replace(/[^a-z0-9]/g, ""))
+      .filter((t) => t.length > 0 && !STOP_WORDS.has(t)),
   );
 }
 const STOP_WORDS = new Set([
