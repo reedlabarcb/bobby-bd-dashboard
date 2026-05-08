@@ -1,19 +1,19 @@
 import { db } from "@/lib/db";
-import { activities, contacts } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { activities, buildings, contactEnrichments, contacts } from "@/lib/db/schema";
+import { inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { brokerReason } from "@/lib/constants/broker-filter";
 
-// Idempotent admin endpoint to remove every contact with type='broker'.
-//
-// Bobby doesn't want competing-brokerage agents (CBRE/C&W/JLL/Hughes Marino
-// etc) showing up as prospects. Imports tag them all type='broker', so this
-// is the cleanup hook to run after each ingest.
-//
-// FK handling: activities.contact_id and buildings.landlord_contact_id can
-// reference contacts.id. We NULL those out first to avoid the FOREIGN KEY
-// constraint failing on delete. (Landlord contacts have type='landlord', so
-// in practice no buildings reference broker rows — but we NULL them anyway
-// for safety.)
+/**
+ * Admin endpoint — remove every contact that matches the broker filter
+ * (title keywords / company keywords / type=broker / brokerage-shaped name).
+ *
+ * Body: {confirm: "DELETE-ALL-BROKERS"} — required for non-dry-run.
+ * Header: x-upload-secret: <UPLOAD_SECRET>
+ *
+ * Mirrors `scripts/remove-brokers.ts` so it can be run against Railway
+ * production without shell access.
+ */
 
 export async function DELETE(request: Request) {
   const serverSecret = process.env.UPLOAD_SECRET;
@@ -24,62 +24,71 @@ export async function DELETE(request: Request) {
     }
   }
 
-  // Belt-and-suspenders: this endpoint is destructive (mass DELETE FROM
-  // contacts WHERE type='broker'). After Bob saw ~76 Centerpoint brokers
-  // disappear, we now require an explicit confirm token in the body so
-  // it can't fire from a stray request, a typo, or a future bug. Pass
-  // {confirm: "DELETE-ALL-BROKERS"} to actually run; without it we
-  // dry-run and return the count that would be deleted.
-  let body: { confirm?: string; dryRun?: boolean } = {};
+  let body: { confirm?: string } = {};
   try {
     body = await request.json();
   } catch {
-    // Empty body = dry run.
+    /* empty body = dry-run */
   }
   const confirmed = body.confirm === "DELETE-ALL-BROKERS";
 
-  const beforeCount = Number(
-    db
-      .select({ c: sql<number>`count(*)` })
-      .from(contacts)
-      .where(eq(contacts.type, "broker"))
-      .get()?.c ?? 0
-  );
+  const all = db.select({
+    id: contacts.id, name: contacts.name, title: contacts.title,
+    company: contacts.company, type: contacts.type,
+  }).from(contacts).all();
+
+  const toDelete: { id: number; name: string; reason: string }[] = [];
+  for (const c of all) {
+    const reason = brokerReason({ name: c.name, title: c.title, company: c.company, type: c.type });
+    if (reason) toDelete.push({ id: c.id, name: c.name, reason });
+  }
 
   if (!confirmed) {
     return NextResponse.json({
       dryRun: true,
-      wouldDelete: beforeCount,
+      total: all.length,
+      wouldDelete: toDelete.length,
+      sample: toDelete.slice(0, 25),
       hint: 'send {"confirm":"DELETE-ALL-BROKERS"} in the body to actually run',
     });
   }
 
-  if (beforeCount === 0) {
-    return NextResponse.json({ ok: true, deleted: 0, fkNulled: 0 });
+  if (toDelete.length === 0) {
+    return NextResponse.json({ ok: true, deleted: 0, total: all.length });
   }
 
-  // 1. NULL FK references in activities
-  const activitiesNulled = db
-    .update(activities)
-    .set({ contactId: null })
-    .where(
-      sql`${activities.contactId} IN (SELECT id FROM contacts WHERE type = 'broker')`
-    )
-    .run();
+  const ids = toDelete.map((x) => x.id);
+  let activitiesNulled = 0;
+  let enrichmentsDeleted = 0;
+  let buildingsNulled = 0;
+  const chunkSize = 500;
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    activitiesNulled += db.update(activities).set({ contactId: null }).where(inArray(activities.contactId, chunk)).run().changes;
+    enrichmentsDeleted += db.delete(contactEnrichments).where(inArray(contactEnrichments.contactId, chunk)).run().changes;
+    buildingsNulled += db.update(buildings).set({ landlordContactId: null }).where(inArray(buildings.landlordContactId, chunk)).run().changes;
+  }
 
-  // 2. NULL FK references in buildings.landlord_contact_id (defensive — should be 0)
-  const buildingsNulled = db.run(
-    sql`UPDATE buildings SET landlord_contact_id = NULL WHERE landlord_contact_id IN (SELECT id FROM contacts WHERE type = 'broker')`
-  );
+  let deleted = 0;
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    deleted += db.delete(contacts).where(inArray(contacts.id, chunk)).run().changes;
+  }
 
-  // 3. Delete the brokers
-  const del = db.delete(contacts).where(eq(contacts.type, "broker")).run();
+  // Sanity: any still match?
+  const remaining = db.select({
+    id: contacts.id, name: contacts.name, title: contacts.title, company: contacts.company, type: contacts.type,
+  }).from(contacts).all();
+  const stillDirty = remaining.filter((c) => brokerReason({ name: c.name, title: c.title, company: c.company, type: c.type })).length;
 
   return NextResponse.json({
     ok: true,
-    deleted: del.changes,
-    activitiesNulled: activitiesNulled.changes,
-    buildingsNulled: (buildingsNulled as { changes?: number }).changes ?? 0,
-    beforeCount,
+    before: all.length,
+    deleted,
+    activitiesNulled,
+    enrichmentsDeleted,
+    buildingsNulled,
+    after: remaining.length,
+    stillMatchingFilter: stillDirty,
   });
 }
