@@ -135,12 +135,26 @@ Return ONLY valid JSON, no preamble:
   ]
 }`;
 
-        const response = await anthropic.beta.messages.create({
-          model: "claude-sonnet-4-6",
-          max_tokens: 2000,
-          tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 } as never],
-          messages: [{ role: "user", content: prompt }],
-        });
+        // Bound the web_search call so we never blow Railway's proxy
+        // gateway timeout (~30s). 20s gives Claude enough time for 2-3
+        // queries; if more were needed the cheaper sources should have
+        // covered it. AbortController cancels the in-flight request.
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 20_000);
+        let response;
+        try {
+          response = await anthropic.beta.messages.create(
+            {
+              model: "claude-sonnet-4-6",
+              max_tokens: 1500,
+              tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 } as never],
+              messages: [{ role: "user", content: prompt }],
+            },
+            { signal: controller.signal },
+          );
+        } finally {
+          clearTimeout(timer);
+        }
         webSearchUsed = true;
 
         const textBlocks = response.content.filter((b) => b.type === "text") as Array<{ type: "text"; text: string }>;
@@ -166,7 +180,10 @@ Return ONLY valid JSON, no preamble:
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "failed";
-        if (msg.includes("400") || msg.includes("credit_balance") || msg.includes("balance")) {
+        const aborted = err instanceof Error && (err.name === "AbortError" || msg.includes("aborted"));
+        if (aborted) {
+          notFound.push("Web search timed out (>20s) — try again or skip");
+        } else if (msg.includes("400") || msg.includes("credit_balance") || msg.includes("balance")) {
           notFound.push("AI search unavailable — top up credits at console.anthropic.com");
         } else {
           errors.push(`Claude web_search: ${msg}`);
