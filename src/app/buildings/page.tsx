@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { buildings, leases, tenants, contacts } from "@/lib/db/schema";
 import { eq, asc, ne } from "drizzle-orm";
 import { BuildingsTable } from "@/components/buildings-table";
+import { deriveBuildingType } from "@/lib/building-type";
 
 export default async function BuildingsPage() {
   // Buildings + landlord contact name (left join — building can have no FK yet).
@@ -73,5 +74,34 @@ export default async function BuildingsPage() {
       : null,
   }));
 
-  return <BuildingsTable buildings={allBuildings} leases={allLeasesWithContact} />;
+  // Derive building type (medical | office | industrial) per building from
+  // property_subtype + name + tenant industries + lease.property_type.
+  // Computed server-side so the client table just renders the label.
+  const leasePropertyType = db
+    .select({ buildingId: leases.buildingId, propertyType: leases.propertyType })
+    .from(leases)
+    .all();
+  const leasePropertyByBuilding = new Map<number, string[]>();
+  for (const l of leasePropertyType) {
+    if (l.buildingId == null) continue;
+    if (!leasePropertyByBuilding.has(l.buildingId)) leasePropertyByBuilding.set(l.buildingId, []);
+    if (l.propertyType) leasePropertyByBuilding.get(l.buildingId)!.push(l.propertyType);
+  }
+  const tenantIndustriesByBuilding = new Map<number, string[]>();
+  for (const l of allLeasesRaw) {
+    if (l.buildingId == null) continue;
+    if (!tenantIndustriesByBuilding.has(l.buildingId)) tenantIndustriesByBuilding.set(l.buildingId, []);
+    if (l.tenantIndustry) tenantIndustriesByBuilding.get(l.buildingId)!.push(l.tenantIndustry);
+  }
+  const buildingsWithType = allBuildings.map((b) => ({
+    ...b,
+    buildingType: deriveBuildingType({
+      propertySubtype: b.propertySubtype,
+      name: b.name,
+      tenantIndustries: tenantIndustriesByBuilding.get(b.id) ?? [],
+      leasePropertyTypes: leasePropertyByBuilding.get(b.id) ?? [],
+    }),
+  }));
+
+  return <BuildingsTable buildings={buildingsWithType} leases={allLeasesWithContact} />;
 }

@@ -42,6 +42,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+type BuildingType = "medical" | "office" | "industrial";
+
 type BuildingRow = {
   id: number;
   name: string | null;
@@ -57,6 +59,7 @@ type BuildingRow = {
   landlordContactId: number | null;
   landlordContactName: string | null;
   sourceFile: string | null;
+  buildingType: BuildingType;
 };
 
 type LeaseRow = {
@@ -84,7 +87,7 @@ type SortField =
   | "tenantCount"
   | "totalSf"
   | "soonestExpiry"
-  | "propertyClass";
+  | "buildingType";
 type SortDir = "asc" | "desc";
 
 const numberFmt = new Intl.NumberFormat("en-US");
@@ -150,6 +153,18 @@ const CLASS_BADGE: Record<string, string> = {
   C: "bg-zinc-500/20 text-slate-600 border-zinc-500/30",
 };
 
+const BUILDING_TYPE_BADGE: Record<BuildingType, string> = {
+  medical: "bg-rose-100 text-rose-700 border-rose-200",
+  office: "bg-blue-100 text-blue-700 border-blue-200",
+  industrial: "bg-amber-100 text-amber-700 border-amber-200",
+};
+
+const BUILDING_TYPE_LABEL: Record<BuildingType, string> = {
+  medical: "Medical",
+  office: "Office",
+  industrial: "Industrial",
+};
+
 type EnrichedBuilding = BuildingRow & {
   leases: LeaseRow[];
   tenantCount: number;
@@ -167,7 +182,7 @@ export function BuildingsTable({
 }) {
   const [search, setSearch] = useState("");
   const [cityFilter, setCityFilter] = useState("all");
-  const [classFilter, setClassFilter] = useState("all");
+  const [buildingTypeFilter, setBuildingTypeFilter] = useState("all");
   const [sortField, setSortField] = useState<SortField>("soonestExpiry");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -222,7 +237,7 @@ export function BuildingsTable({
     /* eslint-disable react-hooks/set-state-in-effect */
     setSearch("");
     setCityFilter("all");
-    setClassFilter("all");
+    setBuildingTypeFilter("all");
     setExpandedRows((prev) => {
       if (prev.has(id)) return prev;
       const next = new Set(prev);
@@ -289,11 +304,9 @@ export function BuildingsTable({
     return Array.from(s).sort();
   }, [rawBuildings]);
 
-  const classes = useMemo(() => {
-    const s = new Set<string>();
-    for (const b of rawBuildings) {
-      if (b.propertyClass) s.add(b.propertyClass);
-    }
+  const buildingTypes = useMemo(() => {
+    const s = new Set<BuildingType>();
+    for (const b of rawBuildings) s.add(b.buildingType);
     return Array.from(s).sort();
   }, [rawBuildings]);
 
@@ -314,7 +327,7 @@ export function BuildingsTable({
         if (!hay.includes(q)) return false;
       }
       if (cityFilter !== "all" && b.city !== cityFilter) return false;
-      if (classFilter !== "all" && b.propertyClass !== classFilter) return false;
+      if (buildingTypeFilter !== "all" && b.buildingType !== buildingTypeFilter) return false;
       return true;
     });
 
@@ -337,15 +350,15 @@ export function BuildingsTable({
           // Buildings with no future expirations sort to the end on asc.
           cmp = (a.soonestMonths ?? 9999) - (b.soonestMonths ?? 9999);
           break;
-        case "propertyClass":
-          cmp = (a.propertyClass || "").localeCompare(b.propertyClass || "");
+        case "buildingType":
+          cmp = a.buildingType.localeCompare(b.buildingType);
           break;
       }
       return sortDir === "asc" ? cmp : -cmp;
     });
 
     return list;
-  }, [enriched, search, cityFilter, classFilter, sortField, sortDir]);
+  }, [enriched, search, cityFilter, buildingTypeFilter, sortField, sortDir]);
 
   const stats = useMemo(() => {
     let in6 = 0,
@@ -463,15 +476,15 @@ export function BuildingsTable({
           </SelectContent>
         </Select>
 
-        <Select value={classFilter} onValueChange={(v) => setClassFilter(v ?? "all")}>
-          <SelectTrigger size="sm" className="w-[120px]">
-            <SelectValue placeholder="Class" />
+        <Select value={buildingTypeFilter} onValueChange={(v) => setBuildingTypeFilter(v ?? "all")}>
+          <SelectTrigger size="sm" className="w-[150px]">
+            <SelectValue placeholder="Building Type" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Classes</SelectItem>
-            {classes.map((c) => (
-              <SelectItem key={c} value={c}>
-                Class {c}
+            <SelectItem value="all">All Building Types</SelectItem>
+            {buildingTypes.map((t) => (
+              <SelectItem key={t} value={t}>
+                {BUILDING_TYPE_LABEL[t]}
               </SelectItem>
             ))}
           </SelectContent>
@@ -507,11 +520,11 @@ export function BuildingsTable({
               </TableHead>
               <TableHead>
                 <button
-                  onClick={() => toggleSort("propertyClass")}
+                  onClick={() => toggleSort("buildingType")}
                   className="flex items-center font-medium"
                 >
-                  Class
-                  <SortIcon field="propertyClass" sortField={sortField} sortDir={sortDir} />
+                  Building Type
+                  <SortIcon field="buildingType" sortField={sortField} sortDir={sortDir} />
                 </button>
               </TableHead>
               <TableHead>Landlord</TableHead>
@@ -628,17 +641,12 @@ function BuildingRowGroup({
             : b.city || b.state || "---"}
         </TableCell>
         <TableCell>
-          {b.propertyClass ? (
-            <Badge
-              className={`${
-                CLASS_BADGE[b.propertyClass] || CLASS_BADGE.C
-              } text-[11px]`}
-            >
-              Class {b.propertyClass}
-            </Badge>
-          ) : (
-            <span className="text-muted-foreground text-xs">---</span>
-          )}
+          <Badge
+            className={`${BUILDING_TYPE_BADGE[b.buildingType]} text-[11px]`}
+            variant="outline"
+          >
+            {BUILDING_TYPE_LABEL[b.buildingType]}
+          </Badge>
         </TableCell>
         <TableCell className="text-muted-foreground text-xs">
           {b.landlordContactId && landlord ? (
