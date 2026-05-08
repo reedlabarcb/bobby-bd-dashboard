@@ -129,9 +129,13 @@ export async function enrichCompany(domain: string): Promise<PDLCompany | null> 
  * Split on WHITESPACE only — internal punctuation ("&", "-", ".") is
  * stripped INSIDE the token so brand abbreviations stay intact:
  *   "J&E Bookkeeping"   → ["je", "bookkeeping"]
- *   "e-bookkeeping firm" → ["ebookkeeping"]   (firm is a stop word)
- * Without this, "J&E" would split into `j` + `e` (both filtered as
- * length<2) and any company with the word "bookkeeping" would match.
+ *   "e-bookkeeping firm" → ["ebookkeeping", "firm"]
+ *   "Acme Inc"          → ["acme"]   (inc is a stop word)
+ *
+ * Stop words are restricted to *corporate-form suffixes only* (LLC, Inc,
+ * Corp, Co, Ltd…). Words like "firm/group/holdings/partners/associates"
+ * carry meaning and DO distinguish entities — stripping them caused
+ * "E-BOOKKEEPING" to falsely match "e-bookkeeping firm".
  */
 function normCompanyTokens(name: string): Set<string> {
   return new Set(
@@ -143,9 +147,9 @@ function normCompanyTokens(name: string): Set<string> {
   );
 }
 const STOP_WORDS = new Set([
-  "the", "and", "of", "a", "an", "co", "company", "corp", "corporation",
-  "inc", "incorporated", "llc", "llp", "lp", "ltd", "limited", "group",
-  "holdings", "holding", "partners", "partnership", "associates", "firm",
+  "the", "and", "of", "a", "an",
+  "co", "company", "corp", "corporation",
+  "inc", "incorporated", "llc", "llp", "lp", "ltd", "limited",
 ]);
 
 /**
@@ -180,17 +184,15 @@ export async function searchPeopleAtCompany(company: string): Promise<PDLPerson[
 
   const wanted = normCompanyTokens(company);
   if (wanted.size === 0) return all;
+  // Exact non-stop-word token-set equality. Tighter than overlap because
+  // PDL's loose `term` search routinely surfaces generic-named companies
+  // ("e-bookkeeping firm") that share one keyword with the searched name
+  // but are different entities.
   return all.filter((p) => {
     if (!p.company) return false;
     const got = normCompanyTokens(p.company);
-    if (got.size === 0) return false;
-    // require at least 50% token overlap with the smaller set
-    const smaller = wanted.size <= got.size ? wanted : got;
-    let hits = 0;
-    for (const t of smaller) {
-      const other = smaller === wanted ? got : wanted;
-      if (other.has(t)) hits++;
-    }
-    return hits / Math.max(1, smaller.size) >= 0.5;
+    if (got.size !== wanted.size) return false;
+    for (const t of wanted) if (!got.has(t)) return false;
+    return true;
   });
 }
