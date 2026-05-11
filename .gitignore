@@ -53,3 +53,4 @@ watcher/.watcher-manifest.json
 # ad-hoc import staging (extracted XLSX/PDF files before upload)
 /tmp-import/
 /tmp/
+.claude/
