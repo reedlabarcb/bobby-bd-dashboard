@@ -123,34 +123,17 @@ export async function enrichCompany(domain: string): Promise<PDLCompany | null> 
   };
 }
 
+import { companyTokens } from "@/lib/company-norm";
+
 /**
- * Normalize a company name for fuzzy comparison.
- *
- * Split on WHITESPACE only — internal punctuation ("&", "-", ".") is
- * stripped INSIDE the token so brand abbreviations stay intact:
- *   "J&E Bookkeeping"   → ["je", "bookkeeping"]
- *   "e-bookkeeping firm" → ["ebookkeeping", "firm"]
- *   "Acme Inc"          → ["acme"]   (inc is a stop word)
- *
- * Stop words are restricted to *corporate-form suffixes only* (LLC, Inc,
- * Corp, Co, Ltd…). Words like "firm/group/holdings/partners/associates"
- * carry meaning and DO distinguish entities — stripping them caused
- * "E-BOOKKEEPING" to falsely match "e-bookkeeping firm".
+ * Normalize a company name for fuzzy comparison via the shared canonical
+ * tokenizer (see `src/lib/company-norm.ts`). Strips corporate suffixes
+ * (LLC, Inc, Corp…) but keeps brand-distinguishing words intact
+ * ("firm", "group", "holdings"…).
  */
 function normCompanyTokens(name: string): Set<string> {
-  return new Set(
-    name
-      .toLowerCase()
-      .split(/\s+/)
-      .map((t) => t.replace(/[^a-z0-9]/g, ""))
-      .filter((t) => t.length > 0 && !STOP_WORDS.has(t)),
-  );
+  return new Set(companyTokens(name));
 }
-const STOP_WORDS = new Set([
-  "the", "and", "of", "a", "an",
-  "co", "company", "corp", "corporation",
-  "inc", "incorporated", "llc", "llp", "lp", "ltd", "limited",
-]);
 
 /**
  * Find people at a company. Returns up to 10 ranked by seniority signals.

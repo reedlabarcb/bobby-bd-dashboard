@@ -22,7 +22,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { EnrichButton } from "@/components/enrich-button";
 import { DeepSearchPersonButton } from "@/components/deep-search-person-button";
 import { AddActivityDialog } from "@/components/add-activity-dialog";
 import { EditContactCard } from "@/components/edit-contact-card";
@@ -106,7 +105,6 @@ export default async function ContactDetailPage({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <EnrichButton contactId={contact.id} />
           <DeepSearchPersonButton contactId={contact.id} />
           <AddActivityDialog contactId={contact.id} />
         </div>

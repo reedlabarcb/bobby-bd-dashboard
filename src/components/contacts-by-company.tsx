@@ -22,6 +22,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { ContactEditDialog } from "@/components/contact-edit-dialog";
+import { companyKey, pickDisplayName } from "@/lib/company-norm";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,33 +59,38 @@ function buildGroups(
   contacts: Contact[],
   seeds: SeedCompany[] = []
 ): CompanyGroup[] {
-  const map = new Map<string, CompanyGroup>();
-  function ensure(key: string, display: string): CompanyGroup {
+  // Group by canonical company key so "Jensen Hughes" and "Jensen Hughes
+  // Inc." land in the same bucket. We track every raw spelling variant
+  // in a per-group set, then pick the best display name at the end.
+  const map = new Map<string, CompanyGroup & { _variants: Set<string> }>();
+  function ensure(key: string, display: string): CompanyGroup & { _variants: Set<string> } {
     let g = map.get(key);
     if (!g) {
-      g = { key, display, profile: null, people: [] };
+      g = { key, display, profile: null, people: [], _variants: new Set([display]) };
       map.set(key, g);
+    } else {
+      g._variants.add(display);
     }
     return g;
   }
 
+  function keyFor(name: string): string {
+    return companyKey(name) || name.trim().toLowerCase();
+  }
+
   // Seed empty groups for every company referenced from the leases / buildings
   // side, so a company can appear in the list even when no contacts exist yet.
-  // These are placeholder groups that get populated below if any contact does
-  // reference the same company.
   for (const s of seeds) {
     if (!s.name || !s.name.trim()) continue;
-    ensure(s.name.trim().toLowerCase(), s.name.trim());
+    ensure(keyFor(s.name), s.name.trim());
   }
 
   for (const c of contacts) {
     if (c.type === "landlord") {
       // The landlord's name IS the company name. Everything keys off that.
       const display = c.name.trim();
-      const key = display.toLowerCase();
-      const g = ensure(key, display);
-      // First landlord wins as profile; later duplicates (shouldn't happen
-      // after audit-fixes) become "people" so they're not lost.
+      const g = ensure(keyFor(display), display);
+      // First landlord wins as profile; later duplicates become "people".
       if (!g.profile) g.profile = c;
       else g.people.push(c);
     } else {
@@ -93,10 +99,17 @@ function buildGroups(
         const g = ensure(NO_COMPANY.toLowerCase(), NO_COMPANY);
         g.people.push(c);
       } else {
-        const key = company.toLowerCase();
-        const g = ensure(key, company);
+        const g = ensure(keyFor(company), company);
         g.people.push(c);
       }
+    }
+  }
+
+  // Pick the canonical display name for each group from its collected
+  // variants (prefers names with a corporate suffix, then proper-casing).
+  for (const g of map.values()) {
+    if (g.key !== NO_COMPANY.toLowerCase() && g._variants.size > 1) {
+      g.display = pickDisplayName(Array.from(g._variants));
     }
   }
 

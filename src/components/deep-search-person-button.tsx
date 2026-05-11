@@ -147,13 +147,13 @@ export function DeepSearchPersonButton({
     <>
       <Button variant={variant} size="sm" onClick={run} disabled={loading} className="gap-1">
         {loading ? <Loader2 className="size-4 animate-spin" /> : <Telescope className="size-4" />}
-        Deep Search
+        Enrich
       </Button>
 
       <Dialog open={open} onOpenChange={(v) => !loading && !saving && setOpen(v)}>
         <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Deep Search Results</DialogTitle>
+            <DialogTitle>Enrich Contact</DialogTitle>
             <DialogDescription>
               Exhaustive multi-source research. Nothing is saved until you click Save.
             </DialogDescription>
