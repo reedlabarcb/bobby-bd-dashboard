@@ -1052,7 +1052,6 @@ function LeaseRowGroup({
                             company={l.tenantName}
                             city={l.propertyCity ?? undefined}
                             state={l.propertyState ?? undefined}
-                            leaseId={l.id}
                             onClose={() => setFindPeopleOpen(false)}
                           />
                         )}

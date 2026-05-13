@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GenericEditDialog } from "@/components/generic-edit-dialog";
+import { TenantEditButton } from "@/components/tenant-edit-button";
 
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -829,6 +830,15 @@ function BuildingDetail({
                             <Sparkles className="h-3 w-3 opacity-70" />
                           ) : null}
                         </button>
+                        <span
+                          className="ml-1 inline-block align-middle"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <TenantEditButton
+                            tenantId={l.tenantId}
+                            tenantName={l.tenantName}
+                          />
+                        </span>
                         {l.isSublease ? (
                           <span className="ml-1 text-[10px] text-muted-foreground">
                             (sublease)

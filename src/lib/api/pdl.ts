@@ -167,15 +167,43 @@ export async function searchPeopleAtCompany(company: string): Promise<PDLPerson[
 
   const wanted = normCompanyTokens(company);
   if (wanted.size === 0) return all;
-  // Exact non-stop-word token-set equality. Tighter than overlap because
-  // PDL's loose `term` search routinely surfaces generic-named companies
-  // ("e-bookkeeping firm") that share one keyword with the searched name
-  // but are different entities.
+  // Two-step filter:
+  //
+  // 1. Company-name match — exact non-stop-word token-set equality.
+  //    Tighter than overlap because PDL's `term` search routinely
+  //    surfaces generic-named companies sharing one keyword with the
+  //    searched name but representing different entities.
+  //
+  // 2. Title-mismatch check — when a candidate's job_title contains a
+  //    company-shaped phrase (e.g. "owner | e-bookkeeping firm"), and
+  //    the tokens of that phrase strictly EXTEND the searched company
+  //    (i.e. they identify a more-specific entity), reject. This catches
+  //    cases where job_company_name is "e-bookkeeping" but the title
+  //    reveals the actual entity is "e-bookkeeping firm" — a different
+  //    business from a lease tenant literally named "E-BOOKKEEPING".
   return all.filter((p) => {
     if (!p.company) return false;
     const got = normCompanyTokens(p.company);
     if (got.size !== wanted.size) return false;
     for (const t of wanted) if (!got.has(t)) return false;
+    // Title mismatch: split on pipe/dash/comma; if any chunk's tokens
+    // are a strict superset of `wanted` AND the chunk contains a
+    // brand-qualifier word ("firm", "group", "holdings", "partners",
+    // "associates", "company", "inc", "co"), the person is at a
+    // longer-named entity, not the one we searched.
+    if (p.title) {
+      const chunks = p.title.split(/[|\-,/]/).map((c) => c.trim()).filter(Boolean);
+      const BRAND_QUALIFIERS = ["firm", "group", "holdings", "partners", "associates"];
+      for (const chunk of chunks) {
+        const chunkTokens = new Set(companyTokens(chunk));
+        if (chunkTokens.size <= wanted.size) continue;
+        let containsAll = true;
+        for (const t of wanted) if (!chunkTokens.has(t)) { containsAll = false; break; }
+        if (!containsAll) continue;
+        const lower = chunk.toLowerCase();
+        if (BRAND_QUALIFIERS.some((q) => lower.includes(q))) return false;
+      }
+    }
     return true;
   });
 }

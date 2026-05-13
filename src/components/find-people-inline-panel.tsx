@@ -71,14 +71,12 @@ export function FindPeopleInlinePanel({
   company,
   city,
   state,
-  leaseId,
   onAdded,
   onClose,
 }: {
   company: string;
   city?: string;
   state?: string;
-  leaseId?: number; // reserved — not currently linked to lease records
   onAdded?: () => void;
   onClose: () => void;
 }) {
@@ -427,7 +425,6 @@ export function FindPeopleInlinePanel({
                       )}
                       {deepEntry.status === "done" && deepEntry.result && (
                         <DeepResultCard
-                          k={k}
                           r={deepEntry.result}
                           added={!!deepEntry.added}
                           onAdd={() => addDeepResult(k)}
@@ -490,9 +487,8 @@ export function FindPeopleInlinePanel({
 }
 
 function DeepResultCard({
-  k: _k, r, added, onAdd,
+  r, added, onAdd,
 }: {
-  k: string;
   r: DeepResult;
   added: boolean;
   onAdd: () => void;
