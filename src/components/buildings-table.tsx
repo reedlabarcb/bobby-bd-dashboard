@@ -3,7 +3,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
-import { toast } from "sonner";
 import {
   Search,
   ArrowUpDown,
@@ -17,7 +16,6 @@ import {
   Clock,
   AlertTriangle,
   Sparkles,
-  Loader2,
   Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -187,43 +185,20 @@ export function BuildingsTable({
   const [sortField, setSortField] = useState<SortField>("soonestExpiry");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
-  const [enrichingTenantId, setEnrichingTenantId] = useState<number | null>(null);
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
   const router = useRouter();
 
-  async function handleTenantClick(lease: LeaseRow) {
+  function handleTenantClick(lease: LeaseRow) {
+    // If we already track a contact, jump to their detail page.
     if (lease.tenantContactId) {
       router.push(`/contacts/${lease.tenantContactId}`);
       return;
     }
-    if (enrichingTenantId !== null) return;
-    setEnrichingTenantId(lease.tenantId);
-    try {
-      toast.message(`Searching Apollo for decision-makers at ${lease.tenantName}…`);
-      const res = await fetch("/api/enrich-tenant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenantId: lease.tenantId }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || `HTTP ${res.status}`);
-        return;
-      }
-      const newIds: number[] = data.createdContactIds || [];
-      if (newIds.length > 0) {
-        toast.success(`Created ${newIds.length} contact${newIds.length === 1 ? "" : "s"} at ${lease.tenantName}`);
-        router.push(`/contacts/${newIds[0]}`);
-        return;
-      }
-      toast.message(
-        `Apollo found ${data.candidatesFound ?? 0} candidates but none matched the decision-maker title filter.`,
-      );
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Enrichment failed");
-    } finally {
-      setEnrichingTenantId(null);
-    }
+    // Otherwise navigate to the contacts page filtered to this company.
+    // The contacts-by-company view will auto-expand the matching group
+    // and the user can fire Find People there — which runs the full
+    // Hunter + PDL + Apollo + Apify + web_search stack, not Apollo alone.
+    router.push(`/contacts?view=company&search=${encodeURIComponent(lease.tenantName)}`);
   }
 
   // Deep-link support: ?id=<buildingId> → auto-expand + scroll into view.
@@ -581,7 +556,6 @@ export function BuildingsTable({
                     else rowRefs.current.delete(b.id);
                   }}
                   onTenantClick={handleTenantClick}
-                  enrichingTenantId={enrichingTenantId}
                 />
               ))
             )}
@@ -598,14 +572,12 @@ function BuildingRowGroup({
   onToggle,
   rowRef,
   onTenantClick,
-  enrichingTenantId,
 }: {
   building: EnrichedBuilding;
   isExpanded: boolean;
   onToggle: () => void;
   rowRef?: (el: HTMLTableRowElement | null) => void;
   onTenantClick: (lease: LeaseRow) => void;
-  enrichingTenantId: number | null;
 }) {
   const color = urgencyColor(b.soonestMonths);
   const landlord = b.landlordContactName || b.landlordName;
@@ -731,7 +703,6 @@ function BuildingRowGroup({
             <BuildingDetail
               building={b}
               onTenantClick={onTenantClick}
-              enrichingTenantId={enrichingTenantId}
             />
           </TableCell>
         </TableRow>
@@ -743,11 +714,9 @@ function BuildingRowGroup({
 function BuildingDetail({
   building: b,
   onTenantClick,
-  enrichingTenantId,
 }: {
   building: EnrichedBuilding;
   onTenantClick: (lease: LeaseRow) => void;
-  enrichingTenantId: number | null;
 }) {
   return (
     <div className="space-y-4">
@@ -811,22 +780,19 @@ function BuildingDetail({
                             e.stopPropagation();
                             onTenantClick(l);
                           }}
-                          disabled={enrichingTenantId === l.tenantId}
                           className={`inline-flex items-center gap-1.5 text-left transition-colors ${
                             l.tenantContactId
                               ? "text-blue-600 hover:text-blue-500 hover:underline"
-                              : "text-amber-300 hover:text-amber-200 hover:underline"
-                          } disabled:opacity-60`}
+                              : "text-amber-700 hover:text-amber-800 hover:underline"
+                          }`}
                           title={
                             l.tenantContactId
                               ? "Open contact"
-                              : "No contact tracked — click to search Apollo for decision-makers"
+                              : "No contact tracked — open Contacts to run Find People"
                           }
                         >
                           {l.tenantName}
-                          {enrichingTenantId === l.tenantId ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : !l.tenantContactId ? (
+                          {!l.tenantContactId ? (
                             <Sparkles className="h-3 w-3 opacity-70" />
                           ) : null}
                         </button>
