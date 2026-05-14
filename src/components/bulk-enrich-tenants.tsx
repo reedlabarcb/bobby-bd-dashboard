@@ -43,22 +43,67 @@ export function BulkEnrichTenants({ tenants }: { tenants: Tenant[] }) {
     setSelectedIds(new Set());
   }
 
-  async function enrichOne(tenantId: number): Promise<RowResult> {
+  async function enrichOne(tenantId: number, tenantName: string): Promise<RowResult> {
     try {
-      const res = await fetch("/api/enrich-tenant", {
+      // Step 1: run the full-stack find-contacts pipeline (Hunter + PDL
+      // + Apollo + Apify + web_search-fallback) for this tenant company.
+      const findRes = await fetch("/api/find-contacts-for-company", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenantId }),
+        body: JSON.stringify({ company: tenantName }),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        return { state: "error", error: data.error || `HTTP ${res.status}` };
+      const findData = await findRes.json();
+      if (!findRes.ok) {
+        return { state: "error", error: findData.error || `HTTP ${findRes.status}` };
       }
+      const candidates = (findData.candidates ?? []) as Array<{
+        name: string;
+        title: string | null;
+        email: string | null;
+        phone: string | null;
+        linkedinUrl: string | null;
+        source: string;
+      }>;
+
+      // Step 2: auto-create only candidates with a confirmed email and
+      // a senior-looking title (CEO/President/COO/VP/Director/Owner/
+      // Founder/Real Estate/Operations/Facilities). Anything weaker
+      // stays as a candidate for the user to review manually via the
+      // per-company Find People flow.
+      const SENIOR = /\b(ceo|president|coo|cfo|vp|vice president|director|head of|chief|owner|founder|principal|managing|real estate|leasing|facilit|operations|asset manager)\b/i;
+      const winners = candidates.filter(
+        (c) => c.email && c.name && (c.title ? SENIOR.test(c.title) : true),
+      ).slice(0, 3);
+
+      let created = 0;
+      let skipped = 0;
+      for (const c of winners) {
+        const noteParts: string[] = [];
+        if (c.linkedinUrl) noteParts.push(`LinkedIn: ${c.linkedinUrl}`);
+        noteParts.push(`Bulk enrich via ${c.source}`);
+        const r = await fetch("/api/contacts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: c.name,
+            email: c.email,
+            phone: c.phone,
+            company: tenantName,
+            title: c.title,
+            type: "tenant",
+            source: `bulk-enrich/${c.source}`,
+            notes: noteParts.join("\n"),
+          }),
+        });
+        if (r.ok) created++;
+        else skipped++;
+      }
+
       return {
         state: "done",
-        created: data.createdContactIds?.length ?? 0,
-        skipped: data.skippedExisting?.length ?? 0,
-        candidates: data.candidatesFound ?? 0,
+        created,
+        skipped,
+        candidates: candidates.length,
       };
     } catch (e) {
       return { state: "error", error: e instanceof Error ? e.message : "request failed" };
@@ -76,8 +121,10 @@ export function BulkEnrichTenants({ tenants }: { tenants: Tenant[] }) {
     let totalErrors = 0;
 
     for (const id of ids) {
+      const t = tenants.find((x) => x.id === id);
+      if (!t) continue;
       setResults((prev) => ({ ...prev, [id]: { state: "running" } }));
-      const result = await enrichOne(id);
+      const result = await enrichOne(id, t.name);
       setResults((prev) => ({ ...prev, [id]: result }));
       if (result.state === "done") totalCreated += result.created || 0;
       if (result.state === "error") totalErrors += 1;
@@ -159,7 +206,7 @@ export function BulkEnrichTenants({ tenants }: { tenants: Tenant[] }) {
                 {result?.state === "running" ? (
                   <span className="flex items-center gap-1.5 text-muted-foreground justify-end">
                     <Loader2 className="h-3 w-3 animate-spin" />
-                    Searching Apollo...
+                    Searching…
                   </span>
                 ) : result?.state === "done" ? (
                   <span className="flex items-center gap-1.5 text-emerald-500 justify-end">

@@ -111,8 +111,10 @@ export default async function EnrichPage() {
         <div className="mb-4">
           <h2 className="text-lg font-semibold">Find decision-makers at tenants without contacts</h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Apollo searches each company for these titles: CEO, President, CFO, COO, VP/Head/Director of Real Estate, VP Operations.
-            Up to 3 contacts created per tenant. Hunter fills in any emails Apollo misses.
+            Runs the full Find People stack (Hunter + PDL + Apollo + Apify + web_search-fallback) per
+            tenant, then auto-creates up to 3 contacts per company that have both a confirmed email and
+            a senior-looking title (CEO/President/COO/VP/Director/Owner/Founder/RE/Ops/Facilities).
+            For weaker candidates, open the company in Contacts and review manually.
           </p>
         </div>
         <BulkEnrichTenants tenants={tenantsNeeding} />
