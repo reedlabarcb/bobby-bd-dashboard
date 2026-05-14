@@ -30,7 +30,7 @@ type Candidate = {
   email: string | null;
   phone: string | null;
   linkedinUrl: string | null;
-  source: "hunter" | "pdl" | "web_search";
+  source: "hunter" | "pdl" | "apollo" | "apify" | "web_search";
   confidence: number;
 };
 
@@ -59,11 +59,15 @@ type DeepEntry = {
 const SOURCE_BADGE: Record<Candidate["source"], string> = {
   hunter: "bg-blue-100 text-blue-700 border-blue-200",
   pdl: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  apollo: "bg-violet-100 text-violet-700 border-violet-200",
+  apify: "bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200",
   web_search: "bg-amber-100 text-amber-700 border-amber-200",
 };
 const SOURCE_LABEL: Record<Candidate["source"], string> = {
   hunter: "Hunter",
   pdl: "PDL",
+  apollo: "Apollo",
+  apify: "Apify",
   web_search: "Web",
 };
 
@@ -83,7 +87,13 @@ export function FindPeopleInlinePanel({
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [counts, setCounts] = useState<{ hunter: number; pdl: number; web_search: number } | null>(null);
+  const [counts, setCounts] = useState<{
+    hunter: number;
+    pdl: number;
+    apollo: number;
+    apify: number;
+    web_search: number;
+  } | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [notFound, setNotFound] = useState<string[]>([]);
   const [webSearchUsed, setWebSearchUsed] = useState(false);
@@ -289,7 +299,8 @@ export function FindPeopleInlinePanel({
               · {candidates.length} found
               {counts && (
                 <>
-                  {" "}(Hunter {counts.hunter}, PDL {counts.pdl}
+                  {" "}(Hunter {counts.hunter}, PDL {counts.pdl},
+                  {" "}Apollo {counts.apollo}, Apify {counts.apify}
                   {webSearchUsed ? `, Web ${counts.web_search}` : ""})
                 </>
               )}
@@ -303,7 +314,7 @@ export function FindPeopleInlinePanel({
 
       {webSearchUsed && (
         <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-          Hunter + PDL returned no matches — web search ran as a last-resort fallback.
+          Hunter + PDL + Apollo + Apify returned no matches — web search ran as a last-resort fallback.
         </div>
       )}
       {errors.length > 0 && (
@@ -322,7 +333,7 @@ export function FindPeopleInlinePanel({
       {loading && (
         <div className="py-6 flex items-center justify-center text-muted-foreground text-sm">
           <Loader2 className="size-4 mr-2 animate-spin" />
-          Searching Hunter + PDL…
+          Searching Hunter + PDL + Apollo + Apify…
         </div>
       )}
 

@@ -1,16 +1,16 @@
 /**
  * POST /api/find-contacts-for-company
  *
- * Cheap people-discovery for a company. Runs only the no-AI sources by
- * default; Claude web_search fires ONLY when both Hunter and PDL return
- * zero candidates.
+ * People-discovery for a company. Fans out across the four "cheap"
+ * deterministic sources in parallel, then falls back to Claude
+ * web_search ONLY if every one of them returned zero.
  *
- * Sources, in order:
- *   1. Hunter domain-search
- *   2. PDL searchPeopleAtCompany
- *   3. Claude web_search  ← last resort, only if 1 + 2 returned 0
- *
- * Apollo is intentionally NOT used here (free-tier 403s; per memory).
+ * Sources, in order of confidence ranking:
+ *   1. Hunter   — domain-search   (free tier, fast)
+ *   2. PDL      — person/search   (free tier, may 402 when exhausted)
+ *   3. Apollo   — people-search   (free tier may 403; ApolloFreeTierError → notFound)
+ *   4. Apify    — linkedin-company-employees actor (when key configured)
+ *   5. Claude   — web_search      (LAST RESORT — only if 1..4 returned zero)
  *
  * Returns candidates only — does NOT write to the DB. Caller is the
  * leases-page inline panel which lets the user check rows and decide
@@ -21,6 +21,12 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { domainSearch } from "@/lib/api/hunter";
 import { searchPeopleAtCompany as pdlSearchPeople } from "@/lib/api/pdl";
+import {
+  searchOrganization as apolloSearchOrg,
+  searchPeople as apolloSearchPeople,
+  ApolloFreeTierError,
+} from "@/lib/api/apollo";
+import { scrapeCompanyEmployees } from "@/lib/api/apify";
 import { isBroker } from "@/lib/constants/broker-filter";
 
 export type CandidateContact = {
@@ -29,13 +35,180 @@ export type CandidateContact = {
   email: string | null;
   phone: string | null;
   linkedinUrl: string | null;
-  source: "hunter" | "pdl" | "web_search";
+  source: "hunter" | "pdl" | "apollo" | "apify" | "web_search";
   confidence: number; // 0-100
 };
 
 function dedupeKey(c: { name: string; email: string | null }): string {
   if (c.email) return `email:${c.email.toLowerCase()}`;
   return `name:${c.name.toLowerCase().trim()}`;
+}
+
+type SourceResult = {
+  source: CandidateContact["source"];
+  candidates: CandidateContact[];
+  errors: string[];
+  notFound: string[];
+  domain?: string;
+};
+
+async function runHunter(company: string, domainHint: string | null): Promise<SourceResult> {
+  const r: SourceResult = { source: "hunter", candidates: [], errors: [], notFound: [] };
+  if (!process.env.HUNTER_API_KEY) {
+    r.notFound.push("Hunter not configured");
+    return r;
+  }
+  try {
+    const ds = await domainSearch(
+      domainHint ? { domain: domainHint } : { company },
+      { limit: 50, onlyPersonal: true },
+    );
+    if (ds.domain) r.domain = ds.domain;
+    for (const e of ds.emails) {
+      const name = [e.first_name, e.last_name].filter(Boolean).join(" ").trim();
+      if (!name) continue;
+      r.candidates.push({
+        name,
+        title: e.position ?? null,
+        email: e.value,
+        phone: e.phone_number ?? null,
+        linkedinUrl: e.linkedin ?? null,
+        source: "hunter",
+        confidence: e.confidence ?? 0,
+      });
+    }
+    if (ds.emails.length === 0) {
+      r.notFound.push(`Hunter has no email index for ${ds.organization || company}`);
+    }
+  } catch (err) {
+    r.errors.push(`Hunter: ${err instanceof Error ? err.message : "failed"}`);
+  }
+  return r;
+}
+
+async function runPdl(company: string): Promise<SourceResult> {
+  const r: SourceResult = { source: "pdl", candidates: [], errors: [], notFound: [] };
+  if (!process.env.PDL_API_KEY) {
+    r.notFound.push("PDL not configured");
+    return r;
+  }
+  try {
+    const people = await pdlSearchPeople(company);
+    for (const p of people) {
+      if (!p.name) continue;
+      r.candidates.push({
+        name: p.name,
+        title: p.title,
+        email: p.email,
+        phone: p.phone,
+        linkedinUrl: p.linkedinUrl,
+        source: "pdl",
+        confidence: 70,
+      });
+    }
+    if (people.length === 0) {
+      r.notFound.push(`PDL: no people found at "${company}"`);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "failed";
+    if (msg.includes("402")) {
+      r.notFound.push("PDL free-tier credits exhausted (402)");
+    } else {
+      r.errors.push(`PDL: ${msg}`);
+    }
+  }
+  return r;
+}
+
+async function runApollo(company: string): Promise<SourceResult> {
+  const r: SourceResult = { source: "apollo", candidates: [], errors: [], notFound: [] };
+  if (!process.env.APOLLO_API_KEY) {
+    r.notFound.push("Apollo not configured");
+    return r;
+  }
+  // Org-search runs first to surface the domain — we attach that to the
+  // SourceResult so the orchestrator can hand it to Hunter on a retry
+  // or to the UI. We don't await sequentially here; org+people run in
+  // parallel inside this branch.
+  const [orgResult, peopleResult] = await Promise.allSettled([
+    apolloSearchOrg(company),
+    apolloSearchPeople({ company }),
+  ]);
+
+  if (orgResult.status === "fulfilled" && orgResult.value?.domain) {
+    r.domain = orgResult.value.domain;
+  } else if (orgResult.status === "rejected") {
+    const err = orgResult.reason;
+    if (err instanceof ApolloFreeTierError) {
+      r.notFound.push("Apollo free-tier limited on organizations/search");
+    } else {
+      r.errors.push(`Apollo org: ${err instanceof Error ? err.message : "failed"}`);
+    }
+  }
+
+  if (peopleResult.status === "fulfilled") {
+    const people = (peopleResult.value.people as Array<Record<string, unknown>> | undefined) ?? [];
+    for (const p of people) {
+      const name =
+        (p.name as string | undefined) ??
+        [p.first_name, p.last_name].filter(Boolean).join(" ").trim();
+      if (!name) continue;
+      r.candidates.push({
+        name,
+        title: (p.title as string | undefined) ?? null,
+        email: (p.email as string | undefined) ?? null,
+        phone: (p.organization_phone as string | undefined) ?? null,
+        linkedinUrl: (p.linkedin_url as string | undefined) ?? null,
+        source: "apollo",
+        confidence: 60,
+      });
+    }
+    if (people.length === 0) {
+      r.notFound.push(`Apollo: no people found at "${company}"`);
+    }
+  } else {
+    const err = peopleResult.reason;
+    if (err instanceof ApolloFreeTierError) {
+      r.notFound.push("Apollo free-tier limited on people-search");
+    } else {
+      r.errors.push(`Apollo: ${err instanceof Error ? err.message : "failed"}`);
+    }
+  }
+  return r;
+}
+
+async function runApify(company: string): Promise<SourceResult> {
+  const r: SourceResult = { source: "apify", candidates: [], errors: [], notFound: [] };
+  if (!process.env.APIFY_API_KEY) {
+    r.notFound.push("Apify not configured");
+    return r;
+  }
+  try {
+    const employees = await scrapeCompanyEmployees(company, { limit: 25 });
+    for (const e of employees) {
+      r.candidates.push({
+        name: e.name,
+        title: e.title,
+        email: e.email,
+        phone: e.phone,
+        linkedinUrl: e.linkedinUrl,
+        source: "apify",
+        confidence: 75,
+      });
+    }
+    if (employees.length === 0) {
+      r.notFound.push(`Apify: no employees found at "${company}"`);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "failed";
+    const aborted = err instanceof Error && (err.name === "AbortError" || msg.includes("aborted"));
+    if (aborted) {
+      r.notFound.push("Apify scrape timed out (>30s)");
+    } else {
+      r.errors.push(`Apify: ${msg}`);
+    }
+  }
+  return r;
 }
 
 export async function POST(request: Request) {
@@ -51,74 +224,39 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "company required" }, { status: 400 });
     }
 
+    // ─── Fan out the four cheap deterministic sources in parallel.
+    // Slowest realistic source: Apify (~10-30s); Hunter/PDL/Apollo
+    // are all sub-second. Parallel cuts total wall-time to whoever is
+    // slowest, instead of the sum.
+    const [hunter, pdl, apollo, apify] = await Promise.all([
+      runHunter(company, domainHint ?? null),
+      runPdl(company),
+      runApollo(company),
+      runApify(company),
+    ]);
+
+    let resolvedDomain: string | null = domainHint ?? hunter.domain ?? apollo.domain ?? null;
     const candidates: CandidateContact[] = [];
     const errors: string[] = [];
     const notFound: string[] = [];
-    let resolvedDomain: string | null = domainHint ?? null;
 
-    // ─── 1. Hunter domain-search ───────────────────────────────
-    if (process.env.HUNTER_API_KEY) {
-      try {
-        const ds = await domainSearch(
-          resolvedDomain ? { domain: resolvedDomain } : { company },
-          { limit: 50, onlyPersonal: true },
-        );
-        if (ds.domain) resolvedDomain = ds.domain;
-        for (const e of ds.emails) {
-          const name = [e.first_name, e.last_name].filter(Boolean).join(" ").trim();
-          if (!name) continue;
-          candidates.push({
-            name,
-            title: e.position ?? null,
-            email: e.value,
-            phone: e.phone_number ?? null,
-            linkedinUrl: e.linkedin ?? null,
-            source: "hunter",
-            confidence: e.confidence ?? 0,
-          });
+    for (const r of [hunter, pdl, apollo, apify]) {
+      for (const c of r.candidates) {
+        const key = dedupeKey(c);
+        // Keep the highest-confidence variant when a person is seen by
+        // multiple sources. Re-sort downstream.
+        const existing = candidates.findIndex((x) => dedupeKey(x) === key);
+        if (existing < 0) {
+          candidates.push(c);
+        } else if (c.confidence > candidates[existing].confidence) {
+          candidates[existing] = c;
         }
-        if (ds.emails.length === 0) {
-          notFound.push(`Hunter has no email index for ${ds.organization || company}`);
-        }
-      } catch (err) {
-        errors.push(`Hunter: ${err instanceof Error ? err.message : "failed"}`);
       }
-    } else {
-      notFound.push("Hunter not configured");
+      errors.push(...r.errors);
+      notFound.push(...r.notFound);
     }
 
-    // ─── 2. PDL searchPeopleAtCompany ──────────────────────────
-    if (process.env.PDL_API_KEY) {
-      try {
-        const pdlPeople = await pdlSearchPeople(company);
-        for (const p of pdlPeople) {
-          if (!p.name) continue;
-          const key = dedupeKey({ name: p.name, email: p.email });
-          if (candidates.some((c) => dedupeKey(c) === key)) continue;
-          candidates.push({
-            name: p.name,
-            title: p.title,
-            email: p.email,
-            phone: p.phone,
-            linkedinUrl: p.linkedinUrl,
-            source: "pdl",
-            confidence: 70,
-          });
-        }
-        if (pdlPeople.length === 0) {
-          notFound.push(`PDL: no people found at "${company}"`);
-        }
-      } catch (err) {
-        errors.push(`PDL: ${err instanceof Error ? err.message : "failed"}`);
-      }
-    } else {
-      notFound.push("PDL not configured");
-    }
-
-    // ─── 3. Claude web_search — LAST RESORT ─────────────────────
-    // Only fires if BOTH Hunter and PDL produced zero candidates. This
-    // is the cheap-default contract: no Claude credits burned just to
-    // surface people who were already in Hunter's index.
+    // ─── Last-resort: Claude web_search if every source above came up empty.
     let webSearchUsed = false;
     if (candidates.length === 0 && process.env.ANTHROPIC_API_KEY) {
       try {
@@ -135,10 +273,6 @@ Return ONLY valid JSON, no preamble:
   ]
 }`;
 
-        // Bound the web_search call so we never blow Railway's proxy
-        // gateway timeout (~30s). 20s gives Claude enough time for 2-3
-        // queries; if more were needed the cheaper sources should have
-        // covered it. AbortController cancels the in-flight request.
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 20_000);
         let response;
@@ -191,20 +325,15 @@ Return ONLY valid JSON, no preamble:
       }
     }
 
-    // Drop any candidate that looks like a broker — title or name match.
+    // ─── Broker filter + sort.
     const brokerCount = candidates.length;
-    const cleanCandidates = candidates.filter(
-      (c) => !isBroker({ name: c.name, title: c.title, company }),
-    );
-    const filteredOut = brokerCount - cleanCandidates.length;
+    const clean = candidates.filter((c) => !isBroker({ name: c.name, title: c.title, company }));
+    const filteredOut = brokerCount - clean.length;
     if (filteredOut > 0) {
       notFound.push(`Filtered out ${filteredOut} broker/brokerage candidate${filteredOut === 1 ? "" : "s"}`);
     }
-    candidates.length = 0;
-    candidates.push(...cleanCandidates);
 
-    // Sort: confirmed-email first, then by confidence, then name
-    candidates.sort((a, b) => {
+    clean.sort((a, b) => {
       const aHas = a.email ? 1 : 0;
       const bHas = b.email ? 1 : 0;
       if (aHas !== bHas) return bHas - aHas;
@@ -215,12 +344,14 @@ Return ONLY valid JSON, no preamble:
     return NextResponse.json({
       company,
       domain: resolvedDomain,
-      candidates: candidates.slice(0, 25),
+      candidates: clean.slice(0, 50),
       webSearchUsed,
       counts: {
-        hunter: candidates.filter((c) => c.source === "hunter").length,
-        pdl: candidates.filter((c) => c.source === "pdl").length,
-        web_search: candidates.filter((c) => c.source === "web_search").length,
+        hunter: clean.filter((c) => c.source === "hunter").length,
+        pdl: clean.filter((c) => c.source === "pdl").length,
+        apollo: clean.filter((c) => c.source === "apollo").length,
+        apify: clean.filter((c) => c.source === "apify").length,
+        web_search: clean.filter((c) => c.source === "web_search").length,
       },
       errors,
       notFound,
