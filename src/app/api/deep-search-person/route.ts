@@ -26,6 +26,10 @@ import { brokerReason } from "@/lib/constants/broker-filter";
 import { findEmail, verifyEmail, domainSearch } from "@/lib/api/hunter";
 import { enrichPerson as pdlEnrichPerson } from "@/lib/api/pdl";
 import { scrapeLinkedIn } from "@/lib/api/apify";
+import {
+  searchPeople as apolloSearchPeople,
+  ApolloFreeTierError,
+} from "@/lib/api/apollo";
 import { searchPerson, AnthropicCreditsError } from "@/lib/api/claude-web-search";
 import {
   applyPattern,
@@ -40,6 +44,7 @@ import {
 type RawFindings = {
   hunter?: unknown;
   pdl?: unknown;
+  apollo?: unknown;
   apify?: unknown;
   webSearch?: unknown;
   emailPattern?: unknown;
@@ -129,6 +134,30 @@ export async function POST(request: Request) {
       notFound.push("PDL not configured");
     }
 
+    // ─── Apollo people-search ──────────────────────────────────
+    let apolloHit: Record<string, unknown> | null = null;
+    if (process.env.APOLLO_API_KEY && company) {
+      try {
+        const result = await apolloSearchPeople({ name, company });
+        const people = (result.people as Array<Record<string, unknown>> | undefined) ?? [];
+        if (people.length > 0) {
+          apolloHit = people[0];
+          rawFindings.apollo = apolloHit;
+          sources.push("apollo");
+        } else {
+          notFound.push(`Apollo: no people found for "${name}" at "${company}"`);
+        }
+      } catch (e) {
+        if (e instanceof ApolloFreeTierError) {
+          notFound.push("Apollo free-tier limited on people-search");
+        } else {
+          errors.push(`Apollo: ${e instanceof Error ? e.message : "failed"}`);
+        }
+      }
+    } else if (!process.env.APOLLO_API_KEY) {
+      notFound.push("Apollo not configured");
+    }
+
     // ─── Apify (only when LinkedIn URL present) ────────────────
     let apifyHit: Awaited<ReturnType<typeof scrapeLinkedIn>> | null = null;
     if (linkedinUrl) {
@@ -138,7 +167,16 @@ export async function POST(request: Request) {
           rawFindings.apify = apifyHit;
           sources.push("apify");
         } catch (e) {
-          errors.push(`Apify: ${e instanceof Error ? e.message : "failed"}`);
+          const msg = e instanceof Error ? e.message : "failed";
+          // 404 / 400 from Apify means the actor couldn't process this
+          // specific LinkedIn URL (dead profile, private, or the actor
+          // doesn't accept the URL shape). Not a real failure — route
+          // to notFound so the UI doesn't surface an alarming "error".
+          if (msg.includes("404") || msg.includes("400")) {
+            notFound.push(`Apify could not scrape LinkedIn URL (${msg.match(/\d{3}/)?.[0] ?? "4xx"})`);
+          } else {
+            errors.push(`Apify: ${msg}`);
+          }
         }
       } else {
         notFound.push("Apify not configured (have LinkedIn URL but can't scrape)");
@@ -176,32 +214,47 @@ export async function POST(request: Request) {
     const apifyTitle = apifyHit?.headline ?? apifyHit?.currentRole ?? null;
     const [apifyCity, apifyState] = (apifyHit?.location ?? "").split(",").map((s) => s.trim());
 
+    // Apollo people-search returns a record; pull the few useful fields
+    // even though they're often partially redacted on free tier.
+    const apolloEmail = (apolloHit?.email as string | undefined) ?? null;
+    const apolloPhone =
+      (apolloHit?.phone_numbers as Array<{ raw_number?: string }> | undefined)?.[0]?.raw_number ??
+      (apolloHit?.organization_phone as string | undefined) ?? null;
+    const apolloTitle = (apolloHit?.title as string | undefined) ?? null;
+    const apolloLinkedIn = (apolloHit?.linkedin_url as string | undefined) ?? null;
+    const apolloCity = (apolloHit?.city as string | undefined) ?? null;
+    const apolloState = (apolloHit?.state as string | undefined) ?? null;
+
     // All five fields go to TEXT columns — coerce strictly to string|null
     // so a stray boolean from web_search can never leak into the DB.
     const email = asString(pickFirst(
       existingEmail,
       hunterFind?.email,
       pdlHit?.email,
+      apolloEmail,
       apifyEmail,
       webFindings.findings.email ?? null,
     ));
     const phone = asString(pickFirst(
       pdlHit?.phone,
+      apolloPhone,
       apifyPhone,
       webFindings.findings.phone ?? null,
     ));
     const title = asString(pickFirst(
       pdlHit?.title,
+      apolloTitle,
       apifyTitle,
       webFindings.findings.title ?? null,
     ));
     const li = asString(pickFirst(
       linkedinUrl,
       pdlHit?.linkedinUrl,
+      apolloLinkedIn,
       webFindings.findings.linkedinUrl ?? null,
     ));
-    const city = asString(pickFirst(pdlHit?.city, apifyCity ?? null, webFindings.findings.city ?? null));
-    const state = asString(pickFirst(pdlHit?.state, apifyState ?? null, webFindings.findings.state ?? null));
+    const city = asString(pickFirst(pdlHit?.city, apolloCity, apifyCity ?? null, webFindings.findings.city ?? null));
+    const state = asString(pickFirst(pdlHit?.state, apolloState, apifyState ?? null, webFindings.findings.state ?? null));
 
     // ─── Email-confidence ──────────────────────────────────────
     let emailConfidence: "verified" | "found-unverified" | "none" = email ? "found-unverified" : "none";

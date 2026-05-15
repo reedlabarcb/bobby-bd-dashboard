@@ -33,12 +33,13 @@ type DeepResult = {
   notFound: string[];
 };
 
-type Stage = "idle" | "hunter" | "pdl" | "apify" | "web_search" | "pattern" | "done";
+type Stage = "idle" | "hunter" | "pdl" | "apollo" | "apify" | "web_search" | "pattern" | "done";
 
 const STAGE_LABEL: Record<Stage, string> = {
   idle: "",
   hunter: "Searching Hunter…",
   pdl: "Searching People Data Labs…",
+  apollo: "Searching Apollo…",
   apify: "Running LinkedIn scrape…",
   web_search: "Running web search…",
   pattern: "Matching email pattern…",
@@ -67,7 +68,7 @@ export function DeepSearchPersonButton({
     // Visual cue: bump through stages while the request runs. The actual
     // server pipeline runs sequentially and we don't get progress events
     // back, so this is a UI affordance — synced to expected stage timing.
-    const stages: Stage[] = ["hunter", "pdl", "apify", "web_search", "pattern"];
+    const stages: Stage[] = ["hunter", "pdl", "apollo", "apify", "web_search", "pattern"];
     let i = 0;
     const timer = setInterval(() => {
       i++;
@@ -161,12 +162,12 @@ export function DeepSearchPersonButton({
 
           {loading && (
             <div className="space-y-2 py-4">
-              {(["hunter", "pdl", "apify", "web_search", "pattern"] as const).map((s) => (
+              {(["hunter", "pdl", "apollo", "apify", "web_search", "pattern"] as const).map((s) => (
                 <div key={s} className="flex items-center gap-2 text-sm">
                   {stage === s ? (
                     <Loader2 className="size-4 animate-spin text-blue-600" />
-                  ) : (["hunter", "pdl", "apify", "web_search", "pattern"].indexOf(stage) >
-                    ["hunter", "pdl", "apify", "web_search", "pattern"].indexOf(s)) ? (
+                  ) : (["hunter", "pdl", "apollo", "apify", "web_search", "pattern"].indexOf(stage) >
+                    ["hunter", "pdl", "apollo", "apify", "web_search", "pattern"].indexOf(s)) ? (
                     <ShieldCheck className="size-4 text-emerald-600" />
                   ) : (
                     <div className="size-4 rounded-full border border-border" />
